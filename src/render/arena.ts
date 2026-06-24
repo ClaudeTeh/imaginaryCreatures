@@ -25,6 +25,10 @@ interface FighterView {
   shake: number;
   lunge: number;
   flash: number;
+  /** 0→1: strike in progress — drives forelimb/head thrust */
+  attackAnim: number;
+  /** 0→1: just took damage — drives recoil lean */
+  hitAnim: number;
 }
 
 interface FloatText {
@@ -104,6 +108,8 @@ export function playBattle(
       f.shake *= 0.8;
       f.lunge *= 0.82;
       f.flash *= 0.85;
+      f.attackAnim = Math.max(0, f.attackAnim - 0.065);
+      f.hitAnim = Math.max(0, f.hitAnim - 0.055);
       const dir = side === "a" ? 1 : -1;
       f.x = f.baseX + f.lunge * dir;
     }
@@ -143,7 +149,9 @@ export function playBattle(
       case "attack": {
         const atk = fighters[e.by];
         const foe = fighters[other(e.by)];
-        atk.lunge = 46;
+        atk.lunge = 85;
+        atk.attackAnim = 1;
+        foe.hitAnim = 1;
         foe.shake = e.crit ? 16 : 9;
         foe.flash = 1;
         foe.targetHp = e.targetHp;
@@ -156,6 +164,8 @@ export function playBattle(
       case "ability": {
         const atk = fighters[e.by];
         const foe = fighters[other(e.by)];
+        atk.attackAnim = 0.8;
+        atk.lunge = 55;
         atk.flash = 0.6;
         sfxAbility();
         const heals = e.value < 0;
@@ -163,6 +173,7 @@ export function playBattle(
           spawnBurst(atk, "#7aa2ff", 8, 2.6);
           addFloat(atk, abilityTag(e.ability), "#7aa2ff", 20);
         } else if (e.ability !== "regenerate") {
+          foe.hitAnim = 0.9;
           foe.shake = 12;
           foe.flash = 1;
           foe.targetHp = e.targetHp;
@@ -284,54 +295,98 @@ export function playBattle(
   }
 
   function drawFighter(f: FighterView) {
-    const bob = Math.sin(frame * 0.12 + (f.side === "a" ? 0 : Math.PI)) * 6;
-    const shakeX = (Math.random() * 2 - 1) * f.shake;
-    const cx = f.x + shakeX;
-    const baseY = GROUND_Y - 70 + bob;
     const alive = f.displayHp > 0.5;
+    const t = frame;
 
-    // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    const bob = alive ? Math.sin(t * 0.11 + (f.side === "a" ? 0 : Math.PI)) * 5 : 0;
+    const breathe = alive ? Math.sin(t * 0.07 + (f.side === "a" ? 0 : Math.PI * 0.5)) : 0;
+    // Slow stalking sway
+    const sway = alive ? Math.sin(t * 0.022 + (f.side === "a" ? 0 : Math.PI)) * 9 : 0;
+
+    const shakeX = (Math.random() * 2 - 1) * f.shake;
+    const shakeY = (Math.random() * 2 - 1) * f.shake * 0.4;
+
+    const cx = f.x + shakeX + sway;
+    const cy = GROUND_Y - 72 + bob + shakeY;
+
+    const atk = f.attackAnim;
+    const hit = f.hitAnim;
+
+    const p = f.partEmojis;
+
+    // Shadow grows during lunge
+    const shadowScale = 1 + (f.lunge / 85) * 0.2;
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.beginPath();
-    ctx.ellipse(f.x, GROUND_Y + 6, 58, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(f.x + sway * 0.4, GROUND_Y + 6, 55 * shadowScale, 13, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.save();
-    ctx.translate(cx, baseY);
+    ctx.translate(cx, cy);
     if (f.side === "b") ctx.scale(-1, 1);
+
     if (!alive) {
-      ctx.globalAlpha = 0.4;
-      ctx.rotate(0.45);
+      ctx.globalAlpha = 0.35;
+      ctx.rotate(0.5);
+      ctx.translate(0, 18);
+    } else if (hit > 0) {
+      // Recoil lean: push away from opponent, tilt back
+      ctx.translate(-hit * 10, -hit * 3);
+      ctx.rotate(-hit * 0.14);
     }
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    const p = f.partEmojis;
+    // Draw back-to-front: tail → hindlimbs → body → forelimbs → head
 
-    // Row 1: head (small, top)
-    ctx.font = "38px serif";
-    ctx.fillText(p.head, 0, -66);
+    // TAIL — wags continuously, retreats slightly when attacking
+    const tailWag = Math.sin(t * 0.18) * 9;
+    ctx.save();
+    ctx.translate(-48 - atk * 8, -6 + tailWag * 0.25);
+    ctx.rotate(-0.22 + Math.sin(t * 0.18) * 0.18 + atk * 0.1);
+    ctx.font = "26px serif";
+    ctx.fillText(p.tail, 0, 0);
+    ctx.restore();
 
-    // Row 2: forelimbs | body | hindlimbs (body is the centrepiece)
-    ctx.font = "58px serif";
-    ctx.fillText(p.body, 0, -14);
+    // HINDLIMBS — rear legs, coil down to push off during attack
+    ctx.save();
+    ctx.translate(-16 - atk * 6, 26 + atk * 7);
+    ctx.rotate(-0.05 + atk * 0.12);
+    ctx.font = "28px serif";
+    ctx.fillText(p.hindlimbs, 0, 0);
+    ctx.restore();
+
+    // BODY — breathing central mass
+    ctx.save();
+    ctx.scale(1 + breathe * 0.016, 1 - breathe * 0.010);
+    ctx.font = "56px serif";
+    ctx.fillText(p.body, -2, -6);
+    ctx.restore();
+
+    // FORELIMBS — strike forward and rise on attack
+    ctx.save();
+    ctx.translate(22 + atk * 34, 16 - atk * 16);
+    ctx.rotate(atk * 0.75);
     ctx.font = "32px serif";
-    ctx.fillText(p.forelimbs, -40, -10);
-    ctx.fillText(p.hindlimbs, 40, -10);
+    ctx.fillText(p.forelimbs, 0, 0);
+    ctx.restore();
 
-    // Row 3: tail (small, bottom)
-    ctx.font = "30px serif";
-    ctx.fillText(p.tail, 0, 32);
+    // HEAD — thrust forward on attack, snap back on hit
+    ctx.save();
+    ctx.translate(34 + atk * 20, -50 - atk * 14);
+    ctx.rotate(atk * 0.22 - hit * 0.18);
+    ctx.font = "40px serif";
+    ctx.fillText(p.head, 0, 0);
+    ctx.restore();
 
     ctx.restore();
 
     if (f.flash > 0.02) {
-      const flashY = baseY - 20;
-      ctx.globalAlpha = f.flash * 0.45;
+      ctx.globalAlpha = f.flash * 0.38;
       ctx.fillStyle = "#ff4d6d";
       ctx.beginPath();
-      ctx.arc(f.x, flashY, 74, 0, Math.PI * 2);
+      ctx.arc(cx, cy - 12, 80, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -397,6 +452,8 @@ function mkView(side: Side, s: { name: string; emoji: string; partEmojis: Record
     shake: 0,
     lunge: 0,
     flash: 0,
+    attackAnim: 0,
+    hitAnim: 0,
   };
 }
 
