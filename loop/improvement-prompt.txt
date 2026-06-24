@@ -1,0 +1,17 @@
+Autonomous improvement tick for the "Imaginary Creatures" game in this directory (Vite + TypeScript creature-DNA combiner + arena auto-battler).
+
+Make ONE bounded, well-scoped improvement that makes the game genuinely better, smoother, or more performant. Draw from these directions, rotating so no area is neglected:
+- Depth/strategy: win-streak boss, campaign ladder, new ability/animal (with rebalance), counter-building hints.
+- Polish/juice: animation, transitions, screen effects, better art, music.
+- Accessibility/UX: more keyboard support, mobile layout, colorblind-safe palette, tooltips.
+- Performance: profiling, render optimization, smaller bundle.
+
+Do NOT attempt several things at once. Required discipline:
+1. Implement the change with clean code matching the existing style.
+2. Add or extend tests for any new logic (Vitest unit tests and/or the Playwright playtest in playtest.mjs).
+3. Run `npm run verify` (typecheck + vitest + build + headless playtest). It MUST end GREEN with zero console/page errors. If it fails, fix it before finishing.
+4. Judge it: confirm the balance tests still pass and inspect a screenshot of the change.
+5. Do not break existing features (lab, splice, randomize, arena, roster, opponent scouting, sound, keyboard, reduced-motion).
+6. Summarize what shipped in one short paragraph.
+
+If you genuinely cannot find a worthwhile improvement that doesn't add bloat, say so in one sentence and make NO changes — do not invent low-value busywork. The wrapper script reverts the working tree automatically if `npm run verify` does not pass, so never leave the build broken.
