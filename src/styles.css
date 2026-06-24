@@ -202,6 +202,30 @@ button:disabled {
   line-height: 1;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
 }
+
+/* Composite body: 3-row emoji silhouette showing each donor part */
+.composite-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
+  flex-shrink: 0;
+}
+.cb-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.cb-part {
+  line-height: 1;
+  cursor: default;
+}
+.cb-head { font-size: 30px; }
+.cb-body { font-size: 40px; }
+.cb-fore, .cb-hind { font-size: 22px; opacity: 0.9; }
+.cb-tail { font-size: 20px; opacity: 0.85; }
 .creature-name {
   font-size: 24px;
   font-weight: 800;

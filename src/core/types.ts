@@ -56,10 +56,16 @@ export interface Animal {
 /** A genome maps each slot to the id of the animal that donated that part. */
 export type Genome = Record<Slot, string>;
 
+/** Per-slot emojis so the UI can show a composite creature instead of one animal. */
+export type PartEmojis = Record<Slot, string>;
+
 export interface Creature {
   name: string;
   genome: Genome;
+  /** Head emoji — kept for backwards compat / simple displays. */
   emoji: string;
+  /** One emoji per slot, in SLOTS order. Use these for composite visuals. */
+  partEmojis: PartEmojis;
   stats: StatBlock;
   abilities: AbilityId[];
   traits: TraitId[];

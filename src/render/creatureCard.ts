@@ -55,9 +55,28 @@ export function creatureCard(c: Creature): HTMLElement {
     ]),
   );
 
+  // Composite body display: arrange part emojis in a rough creature silhouette.
+  // Row 1: head (centre)
+  // Row 2: forelimbs | body | hindlimbs
+  // Row 3: tail (centre)
+  const p = c.partEmojis;
+  const composite = el("div", { class: "composite-body", "aria-hidden": "true" }, [
+    el("div", { class: "cb-row cb-row-head" }, [
+      el("span", { class: "cb-part cb-head", title: "Head" }, [p.head]),
+    ]),
+    el("div", { class: "cb-row cb-row-mid" }, [
+      el("span", { class: "cb-part cb-fore", title: "Forelimbs" }, [p.forelimbs]),
+      el("span", { class: "cb-part cb-body", title: "Body" }, [p.body]),
+      el("span", { class: "cb-part cb-hind", title: "Hindlimbs" }, [p.hindlimbs]),
+    ]),
+    el("div", { class: "cb-row cb-row-tail" }, [
+      el("span", { class: "cb-part cb-tail", title: "Tail" }, [p.tail]),
+    ]),
+  ]);
+
   return el("div", { class: "creature-card fadein" }, [
     el("div", { class: "creature-head" }, [
-      el("div", { class: "creature-emoji" }, [c.emoji]),
+      composite,
       el("div", {}, [
         el("h3", { class: "creature-name" }, [c.name]),
         el("div", { class: "creature-sub" }, [`Power ${powerRating(c)}`]),

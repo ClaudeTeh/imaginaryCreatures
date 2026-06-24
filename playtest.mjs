@@ -124,11 +124,14 @@ try {
   await page.waitForTimeout(450); // let the fade-in settle for a true screenshot
   const barCount = await page.locator(".layout .creature-card .bar").count();
   if (barCount !== 5) throw new Error(`expected 5 stat bars on player card, got ${barCount}`);
-  const emoji = (await page.textContent(".creature-emoji"))?.trim();
-  if (!emoji) throw new Error("creature emoji is empty");
+  // Composite body: check that the head part emoji is visible (not empty).
+  const headEmoji = (await page.textContent(".layout .cb-head"))?.trim();
+  if (!headEmoji) throw new Error("composite head emoji is empty");
+  const bodyEmoji = (await page.textContent(".layout .cb-body"))?.trim();
+  if (!bodyEmoji) throw new Error("composite body emoji is empty");
   const cardVisible = await page.locator(".layout .creature-card").isVisible();
   if (!cardVisible) throw new Error("creature card is not visible");
-  log(`returned to lab; card OK (emoji ${emoji}, ${barCount} bars)`);
+  log(`returned to lab; card OK (head ${headEmoji}, body ${bodyEmoji}, ${barCount} bars)`);
 
   // Roster: save the current creature, confirm it appears, then load it back.
   await page.getByRole("button", { name: "💾 Save" }).click();
@@ -139,7 +142,8 @@ try {
   await page.waitForSelector(".creature-name", { timeout: 5000 });
   log(`roster OK (${rosterCount} saved, load works)`);
 
-  await page.screenshot({ path: "playtest-lab.png" });
+  await page.screenshot({ path: "playtest-lab.png", fullPage: false });
+  await page.screenshot({ path: "playtest-top.png", clip: { x: 0, y: 0, width: 1280, height: 500 } });
 
   // Reduced-motion: a fresh context that requests reduced motion must resolve a
   // battle near-instantly (accessibility + performance).

@@ -16,6 +16,7 @@ interface FighterView {
   side: Side;
   name: string;
   emoji: string;
+  partEmojis: Record<string, string>;
   maxHp: number;
   displayHp: number;
   targetHp: number;
@@ -285,34 +286,52 @@ export function playBattle(
   function drawFighter(f: FighterView) {
     const bob = Math.sin(frame * 0.12 + (f.side === "a" ? 0 : Math.PI)) * 6;
     const shakeX = (Math.random() * 2 - 1) * f.shake;
-    const x = f.x + shakeX;
-    const y = GROUND_Y - 60 + bob;
+    const cx = f.x + shakeX;
+    const baseY = GROUND_Y - 70 + bob;
     const alive = f.displayHp > 0.5;
 
     // shadow
     ctx.fillStyle = "rgba(0,0,0,0.35)";
     ctx.beginPath();
-    ctx.ellipse(f.x, GROUND_Y + 6, 54, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(f.x, GROUND_Y + 6, 58, 14, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.save();
-    ctx.translate(x, y);
-    if (f.side === "b") ctx.scale(-1, 1); // face each other
+    ctx.translate(cx, baseY);
+    if (f.side === "b") ctx.scale(-1, 1);
     if (!alive) {
       ctx.globalAlpha = 0.4;
-      ctx.rotate(0.5);
+      ctx.rotate(0.45);
     }
-    ctx.font = "96px serif";
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(f.emoji, 0, 0);
+
+    const p = f.partEmojis;
+
+    // Row 1: head (small, top)
+    ctx.font = "38px serif";
+    ctx.fillText(p.head, 0, -66);
+
+    // Row 2: forelimbs | body | hindlimbs (body is the centrepiece)
+    ctx.font = "58px serif";
+    ctx.fillText(p.body, 0, -14);
+    ctx.font = "32px serif";
+    ctx.fillText(p.forelimbs, -40, -10);
+    ctx.fillText(p.hindlimbs, 40, -10);
+
+    // Row 3: tail (small, bottom)
+    ctx.font = "30px serif";
+    ctx.fillText(p.tail, 0, 32);
+
     ctx.restore();
 
     if (f.flash > 0.02) {
-      ctx.globalAlpha = f.flash * 0.5;
+      const flashY = baseY - 20;
+      ctx.globalAlpha = f.flash * 0.45;
       ctx.fillStyle = "#ff4d6d";
       ctx.beginPath();
-      ctx.arc(f.x, y, 70, 0, Math.PI * 2);
+      ctx.arc(f.x, flashY, 74, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -364,11 +383,12 @@ export function playBattle(
   return () => cancelAnimationFrame(raf);
 }
 
-function mkView(side: Side, s: { name: string; emoji: string; maxHp: number }, x: number): FighterView {
+function mkView(side: Side, s: { name: string; emoji: string; partEmojis: Record<string, string>; maxHp: number }, x: number): FighterView {
   return {
     side,
     name: s.name,
     emoji: s.emoji,
+    partEmojis: s.partEmojis,
     maxHp: s.maxHp,
     displayHp: s.maxHp,
     targetHp: s.maxHp,

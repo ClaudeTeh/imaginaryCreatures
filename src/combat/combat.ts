@@ -5,7 +5,7 @@ import { ABILITIES } from "../data/abilities";
 export type Side = "a" | "b";
 
 export type BattleEvent =
-  | { t: number; kind: "start"; side: Side; maxHp: number; name: string; emoji: string }
+  | { t: number; kind: "start"; side: Side; maxHp: number; name: string; emoji: string; partEmojis: Record<string, string> }
   | { t: number; kind: "attack"; by: Side; dmg: number; crit: boolean; targetHp: number }
   | { t: number; kind: "ability"; by: Side; ability: AbilityId; value: number; targetHp: number }
   | { t: number; kind: "poison"; on: Side; dmg: number; hp: number }
@@ -27,6 +27,7 @@ interface Fighter {
   side: Side;
   name: string;
   emoji: string;
+  partEmojis: Record<string, string>;
   hp: number;
   maxHp: number;
   attack: number;
@@ -49,6 +50,7 @@ function makeFighter(side: Side, c: Creature): Fighter {
     side,
     name: c.name,
     emoji: c.emoji,
+    partEmojis: c.partEmojis,
     hp: c.stats.health,
     maxHp: c.stats.health,
     attack: c.stats.attack,
@@ -88,8 +90,8 @@ export function simulateBattle(ca: Creature, cb: Creature, rng: RNG): BattleResu
   const log: string[] = [];
   let t = 0;
 
-  events.push({ t, kind: "start", side: "a", maxHp: a.maxHp, name: a.name, emoji: a.emoji });
-  events.push({ t, kind: "start", side: "b", maxHp: b.maxHp, name: b.name, emoji: b.emoji });
+  events.push({ t, kind: "start", side: "a", maxHp: a.maxHp, name: a.name, emoji: a.emoji, partEmojis: a.partEmojis });
+  events.push({ t, kind: "start", side: "b", maxHp: b.maxHp, name: b.name, emoji: b.emoji, partEmojis: b.partEmojis });
 
   const useAbility = (self: Fighter, foe: Fighter): boolean => {
     // Fire the most expensive ability we can currently afford.

@@ -4,6 +4,7 @@ import {
   type AbilityId,
   type Creature,
   type Genome,
+  type PartEmojis,
   type Slot,
   type StatBlock,
   type TraitId,
@@ -32,10 +33,16 @@ export function buildCreature(genome: Genome, name?: string): Creature {
   if (traits.has("predator")) stats.attack = Math.round(stats.attack * 1.15);
   if (traits.has("hardy")) stats.health = Math.round(stats.health * 1.15);
 
+  const partEmojis = SLOTS.reduce((acc, slot) => {
+    acc[slot] = getAnimal(genome[slot]).emoji;
+    return acc;
+  }, {} as PartEmojis);
+
   return {
     name: name ?? generateName(genome),
     genome,
     emoji: getAnimal(genome.head).emoji,
+    partEmojis,
     stats,
     abilities: [...abilities],
     traits: [...traits],
