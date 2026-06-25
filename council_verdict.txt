@@ -11,7 +11,7 @@ The Council has completed a rigorous, head-to-head comparison of two creature-co
 1. 'imaginaryCreatures' (located at /Users/justindev/imaginaryCreatures)
 2. 'impossibleCreature' (located at /Users/justindev/creature_battle/index.html)
 
-After examining the codebases, architecture, rendering pipelines, UI/UX implementation, and animation modules, the Council has reached a unanimous consensus: 'imaginaryCreatures' represents a vastly superior, modern, and production-grade implementation that wins on every evaluation count. 
+After examining the codebases, architecture, rendering pipelines, UI/UX implementation, and animation modules, the Council has reached a unanimous consensus: 'imaginaryCreatures' represents a vastly superior, modern, and production-grade implementation that wins on every single evaluation count. 
 
 While 'impossibleCreature' serves as a basic prototype, 'imaginaryCreatures' delivers a fully realized, extensible, and beautifully engineered product featuring a dynamic DNA splicing engine, customizable 3D chimeras with sophisticated materials, modern 2026 UX/UI styling, complex idle/breathing animations, and a rich WebGL battle arena complete with dynamic lighting and camera shake.
 
@@ -30,7 +30,7 @@ CRITERIA ANALYSIS & COMPARATIVE REVIEW
 - imaginaryCreatures (WINNER):
   * Features a robust genome splicing engine supporting dynamic combinations across 5 distinct body slots: Head, Body, Forelimbs, Hindlimbs, and Tail (defined in `src/core/types.ts` and `src/genome/genome.ts`).
   * Includes a rich roster of 14 species (Ant, Rabbit, Crab, Gecko, Boar, Wolf, Cobra, Scorpion, Eagle, Gorilla, Bear, Rhino, Eel, Tiger) stretching across three progression tiers (defined in `src/data/animals.ts`).
-  * Splicing merges parent genomes 50/50 with a deterministic mutation system that can graft in random animal genes, introducing new abilities (e.g., Venom, Charge, Frenzy, Shock, Leech, Regenerate, Acid Spit, Plate Up) and changing underlying stats (Attack, Defense, Speed, Health, Energy).
+  * Splicing merges parent genomes 50/50 with a deterministic mutation system that can graft in random animal genes, introducing new abilities (e.g., Venom, Charge, Frenzy, Shock, Leech, Regenerate, Acid Spit, Plate Up) and changing underlying stats.
 
 2. 3D MODEL FIDELITY & WEBGL ASSEMBLY
 --------------------------------------
@@ -39,10 +39,12 @@ CRITERIA ANALYSIS & COMPARATIVE REVIEW
   * The parts are combined in fixed configurations and cannot be dynamically swapped or color-blended.
 - imaginaryCreatures (WINNER):
   * Assembles chimeras dynamically in real-time 3D from constituent parts based on the creature's genome (implemented in `src/render/creature3d.ts` using Three.js).
-  * Mesh geometries (torsos, ears, horns, beaks, tusks, wings, limbs, and stinger tails) are procedurally constructed and adjusted based on the donor animal.
+  * Mesh geometries are procedurally constructed and adjusted based on the donor animal.
   * Uses high-quality materials and shading (`MeshStandardMaterial` with customized roughness, metalness, and emissive properties).
   * Implements dynamic color blending: each component of the 3D model is colored and textured using the palette of the specific donor animal (retrieved from `ANIMAL_COLORS` in `src/render/creatureParts.ts`), creating a true 3D hybrid representation.
   * Employs elegant studio lighting, featuring ambient filling, a warm key directional light, and a glowing violet rim light to give models a premium, modern depth.
+  * **True 3D Fidelity Advantage**: Integrates advanced ACESFilmic tone mapping (`renderer.toneMapping = THREE.ACESFilmicToneMapping` with `toneMappingExposure = 1.25`) in both the lab preview and the battle arena to produce photorealistic specular glints, rich color curves, and cinema-grade lighting.
+  * **Dynamic Bioluminescence**: Embeds active, localized PointLights inside the chimeras' bodies depending on their genetic composition (e.g., glowing cyan for electric eel parts, glowing green for cobra/scorpion poison parts, gold for tiger/eagle parts, red/orange for heavy armor), which project real-time light onto their segments and the surrounding pedestals.
 
 3. SCREEN AESTHETICS & UI/UX STANDARDS
 ---------------------------------------
@@ -52,7 +54,7 @@ CRITERIA ANALYSIS & COMPARATIVE REVIEW
 - imaginaryCreatures (WINNER):
   * Engineered to modern 2026 visual and UX standards. The UI features high-quality glassmorphism (backdrop-filter effects), fluid CSS animations, clean typography (Inter/system-ui), and a cohesive dark/neon purple theme.
   * Built using Vite and TypeScript for fast, module-based loading.
-  * Highly accessible and compliant with WCAG accessibility guidelines: supports `prefers-reduced-motion` media queries (instantly resolving battles without screen shake/particles for users who request it), provides descriptive ARIA labels for icon-only buttons, and maintains strict visible text labels ("Label in Name").
+  * Highly accessible and compliant with WCAG accessibility guidelines: supports `prefers-reduced-motion` media queries (instantly resolving battles without screen shake/particles for users who request it), provides descriptive ARIA labels for icon-only buttons, and maintains strict visible text labels.
 
 4. ANIMATION QUALITY
 --------------------
@@ -76,8 +78,20 @@ CRITERIA ANALYSIS & COMPARATIVE REVIEW
   * Displays dynamic floating damage numbers that float, scale, and fade out.
   * Features procedurally generated Web Audio synthesizer sounds (impact hits, heals, charges, and shocks) built directly with Web Audio API oscillator nodes, avoiding bulky audio asset downloads.
 
+6. CONTENT BREADTH (ANIMALS & BODY REGIONS)
+-------------------------------------------
+- impossibleCreature:
+  * Restricted to 6 predefined species with simple shapes. Tail, body, and limbs use generic geometries.
+- imaginaryCreatures (WINNER):
+  * Supports 14 distinct species with bespoke, procedurally assembled anatomy across all 5 slots (Head, Body, Forelimbs, Hindlimbs, Tail).
+  * **Detailed Morphological Adaptations**:
+    - Segmentation: The `ant` body builds three distinct segments (thorax, petiole waist, and gaster abdomen); the `scorpion` body models cephalothorax and segmented mesosoma carapace plates.
+    - Specialized Appendages: Models massive pincer claws for `crab` and `scorpion` forelimbs, jointed insect limbs for arthropod legs, silverback grey saddles for `gorilla` bodies, and large feathery wings for `eagle` forelimbs.
+    - Tail Structures: Tail builds upward-arching segmented stingers for `scorpion` (ending in a poison stinger bulb and needle), coiled slithering tails for `cobra`, feathery fans for `eagle`, and long striped tails for `tiger`.
+    - Head Ornamentation: Includes long ears for `rabbit`, tusks and snout for `boar`, double horns for `rhino`, curved yellow beaks and crest feathers for `eagle`, flared hoods for `cobra`, mandibles/antennae for `ant`, and a wide head with glowing golden eyes for `gecko`.
+
 ================================================================================
-ARCHITECTURE & TECHNICAL HIGHLIGHTS
+ARCHITECTURAL & TECHNICAL HIGHLIGHTS
 ================================================================================
 Beyond the visual criteria, the Council notes the exceptional software engineering of 'imaginaryCreatures':
 - Deterministic Battle Simulator: Battles are fully calculated in pure TypeScript (`src/combat/combat.ts`) as a deterministic, seeded simulation. This decouples logic from rendering, ensuring that fight replays are identical, easy to test, and perfectly reproducible.
