@@ -172,6 +172,7 @@ export function playBattle(
   const activeFloats3D: Float3D[] = [];
 
   let hudOverlay: HTMLElement | null = null;
+  let speedLinesCanvas: HTMLCanvasElement | null = null;
 
   const starts = result.events.filter((e) => e.kind === "start") as Extract<
     BattleEvent,
@@ -248,6 +249,26 @@ export function playBattle(
     spotlight.position.set(0, 10, 0);
     spotlight.castShadow = true;
     scene3D.add(spotlight);
+
+    // Volumetric Stadium Light Rays
+    const rayCount = 3;
+    const rayGeo = new THREE.CylinderGeometry(0.3, 1.2, 14, 16, 1, true);
+    const rayMat = new THREE.MeshBasicMaterial({
+      color: 0x7aa2ff,
+      transparent: true,
+      opacity: 0.12,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    for (let i = 0; i < rayCount; i++) {
+      const ray = new THREE.Mesh(rayGeo, rayMat);
+      ray.position.set(-6 + i * 6 + (Math.random() - 0.5) * 2, 7, -3 + (Math.random() - 0.5) * 2);
+      ray.rotation.z = (Math.random() - 0.5) * 0.15;
+      ray.rotation.x = (Math.random() - 0.5) * 0.15;
+      ray.name = `light_ray_${i}`;
+      scene3D.add(ray);
+    }
 
     // Arena Floor
     arenaGroup = new THREE.Group();
@@ -349,6 +370,16 @@ export function playBattle(
     canvas.parentElement?.style.setProperty("position", "relative");
     canvas.parentElement?.appendChild(hudOverlay);
 
+    speedLinesCanvas = document.createElement("canvas");
+    speedLinesCanvas.width = W;
+    speedLinesCanvas.height = H;
+    speedLinesCanvas.style.position = "absolute";
+    speedLinesCanvas.style.top = "0";
+    speedLinesCanvas.style.left = "0";
+    speedLinesCanvas.style.pointerEvents = "none";
+    speedLinesCanvas.style.display = "none";
+    canvas.parentElement?.appendChild(speedLinesCanvas);
+
     use3D = true;
   } catch (e) {
     console.warn("WebGL not supported, falling back to 2D canvas:", e);
@@ -389,6 +420,7 @@ export function playBattle(
         const ease = tIntro * (2 - tIntro);
         camera3D.position.set(0, 14 - ease * 6.5, 22 - ease * 7.5);
         camera3D.lookAt(0, 1.2, 0);
+        if (speedLinesCanvas) speedLinesCanvas.style.display = "none";
       } else if (cinematic.active) {
         cinematic.timer++;
         const progress = cinematic.timer / cinematic.duration;
@@ -400,6 +432,12 @@ export function playBattle(
         
         camera3D.position.lerp(targetCamPos, 0.12);
         camera3D.lookAt(new THREE.Vector3(0, 1.2, 0).lerp(targetLookAt, 0.5));
+
+        // Draw radial speed lines to amplify velocity
+        if (speedLinesCanvas) {
+          speedLinesCanvas.style.display = "block";
+          drawSpeedLines(speedLinesCanvas);
+        }
         
         // 2. Dim background, raise caster spotlight
         spotlight!.target = caster.model;
@@ -422,6 +460,8 @@ export function playBattle(
           spotlight!.intensity = 0;
         }
       } else {
+        if (speedLinesCanvas) speedLinesCanvas.style.display = "none";
+
         // Dynamic Combat Camera: pan slightly based on active lunges
         const targetCamPos = new THREE.Vector3(0, 7.5, 14.5);
         const targetLookAt = new THREE.Vector3(0, 1.2, 0);
@@ -491,6 +531,9 @@ export function playBattle(
         if (p.mesh.geometry.type === "RingGeometry") {
           p.mesh.scale.addScalar(0.14);
         } else {
+          if ((p.mesh.material as THREE.MeshBasicMaterial).color.getHexString() === "b0b6c2") {
+            p.mesh.scale.addScalar(0.06);
+          }
           p.velocity.y -= 0.003; // gravity
         }
         p.life -= p.decay;
@@ -568,6 +611,36 @@ export function playBattle(
         });
       }
 
+      // Animate volumetric light rays
+      for (let i = 0; i < 3; i++) {
+        const ray = scene3D.getObjectByName(`light_ray_${i}`);
+        if (ray instanceof THREE.Mesh) {
+          ray.rotation.y += 0.003;
+          (ray.material as THREE.MeshBasicMaterial).opacity = 0.1 + Math.sin(frame * 0.02 + i) * 0.04;
+        }
+      }
+
+      // Intro drop-in landing check & shake
+      if (frame === introDuration) {
+        camShake = 1.8;
+        spawnDustCloud3D(fighters3D.a.model.position, 18);
+        spawnDustCloud3D(fighters3D.b.model.position, 18);
+      }
+
+      // Soundwave cries from mouths during roar
+      if (frame >= introDuration && frame < introDuration + 30 && frame % 10 === 0) {
+        for (const sName of ["a", "b"] as Side[]) {
+          const fObj = fighters3D[sName];
+          const headPart = fObj.model.getObjectByName("head");
+          if (headPart) {
+            const mouthPos = new THREE.Vector3();
+            headPart.getWorldPosition(mouthPos);
+            mouthPos.z += sName === "a" ? 0.5 : -0.5;
+            spawnSoundwaveRing3D(mouthPos, "#c39bff");
+          }
+        }
+      }
+
       // Update 3D fighter models
       for (const side of ["a", "b"] as Side[]) {
         const f = fighters3D[side];
@@ -586,6 +659,8 @@ export function playBattle(
             f.actionState = "strike";
             f.actionTimer = 0;
             f.actionDuration = 5;
+            // Takeoff lunge dust cloud!
+            spawnDustCloud3D(f.model.position, 8);
           }
         } else if (f.actionState === "strike") {
           f.actionTimer++;
@@ -652,11 +727,19 @@ export function playBattle(
 
         const alive = fView.displayHp > 0.5;
         if (alive) {
-          currentPos.y += Math.sin(f.time * 2.5) * 0.08 + 0.1;
+          if (frame < introDuration) {
+            // Drop-in animation from Y=8 to Y=0.1
+            const progress = frame / introDuration;
+            const dropY = 8.0 * (1.0 - progress * progress);
+            currentPos.y += dropY + 0.1;
+          } else {
+            currentPos.y += Math.sin(f.time * 2.5) * 0.08 + 0.1;
+          }
         } else {
           currentPos.y -= 1.0;
           f.model.rotation.z = side === "a" ? -0.8 : 0.8;
-          if (Math.random() < 0.1) {
+          const battleActive = cursor < ordered.length || frame <= durationFrames;
+          if (battleActive && Math.random() < 0.1) {
             spawnBurst3D(f.model.position, "#555555", 3, 0.03);
           }
         }
@@ -682,20 +765,64 @@ export function playBattle(
         // Active Head Tracking of opponent's head
         const headPart = f.model.getObjectByName("head");
         if (headPart && alive && targetF) {
-          const worldPosHead = new THREE.Vector3();
-          headPart.getWorldPosition(worldPosHead);
-          const worldPosTarget = new THREE.Vector3();
-          targetF.model.getWorldPosition(worldPosTarget);
-          worldPosTarget.y += 1.6;
+          if (frame > introDuration - 20 && frame < introDuration + 40) {
+            // Roar tilt: tilt head up and slightly outward
+            headPart.rotation.x = -0.35;
+            headPart.rotation.y = side === "a" ? 0.2 : -0.2;
+          } else {
+            const worldPosHead = new THREE.Vector3();
+            headPart.getWorldPosition(worldPosHead);
+            const worldPosTarget = new THREE.Vector3();
+            targetF.model.getWorldPosition(worldPosTarget);
+            worldPosTarget.y += 1.6;
+            
+            const localTarget = headPart.parent!.worldToLocal(worldPosTarget.clone());
+            const angleY = Math.atan2(localTarget.x, localTarget.z);
+            const angleX = -Math.atan2(localTarget.y, Math.hypot(localTarget.x, localTarget.z));
+            
+            const clampedY = Math.max(-0.6, Math.min(0.6, angleY));
+            const clampedX = Math.max(-0.4, Math.min(0.4, angleX));
+            headPart.rotation.y += (clampedY - headPart.rotation.y) * 0.1;
+            headPart.rotation.x += (clampedX - headPart.rotation.x) * 0.1;
+          }
+        }
+
+        // Update rabbit ears physics (spring bounce)
+        const earL0 = f.model.getObjectByName("ear_l_0");
+        const earL1 = f.model.getObjectByName("ear_l_1");
+        const earR0 = f.model.getObjectByName("ear_r_0");
+        const earR1 = f.model.getObjectByName("ear_r_1");
+        if (earL0 && earR0 && alive) {
+          const bounceX = Math.sin(f.time * 4.0) * 0.08;
+          const bounceZ = Math.cos(f.time * 3.0) * 0.05;
           
-          const localTarget = headPart.parent!.worldToLocal(worldPosTarget.clone());
-          const angleY = Math.atan2(localTarget.x, localTarget.z);
-          const angleX = -Math.atan2(localTarget.y, Math.hypot(localTarget.x, localTarget.z));
-          
-          const clampedY = Math.max(-0.6, Math.min(0.6, angleY));
-          const clampedX = Math.max(-0.4, Math.min(0.4, angleX));
-          headPart.rotation.y += (clampedY - headPart.rotation.y) * 0.1;
-          headPart.rotation.x += (clampedX - headPart.rotation.x) * 0.1;
+          earL0.rotation.x = bounceX;
+          earL0.rotation.z = -0.05 + bounceZ;
+          if (earL1) {
+            earL1.rotation.x = bounceX * 1.5;
+            earL1.rotation.z = bounceZ * 0.8;
+          }
+
+          earR0.rotation.x = bounceX;
+          earR0.rotation.z = 0.05 - bounceZ;
+          if (earR1) {
+            earR1.rotation.x = bounceX * 1.5;
+            earR1.rotation.z = -bounceZ * 0.8;
+          }
+        }
+
+        // Animate mouth lower jaw opening during roars/attacks
+        const lowerJaw = f.model.getObjectByName("lower_jaw");
+        if (lowerJaw && alive) {
+          let mouthOpen = 0;
+          if (frame > introDuration - 20 && frame < introDuration + 40) {
+            mouthOpen = 0.35; // Roar!
+          } else if (f.actionState === "windup" || f.actionState === "strike") {
+            mouthOpen = 0.25; // Attack!
+          } else {
+            mouthOpen = Math.max(0, Math.sin(f.time * 1.8) * 0.06); // Breath
+          }
+          lowerJaw.rotation.x = mouthOpen;
         }
 
         // Eye blinking
@@ -869,6 +996,89 @@ export function playBattle(
     }
   };
 
+  const spawnDustCloud3D = (pos: THREE.Vector3, count = 15) => {
+    const geo = new THREE.SphereGeometry(0.18, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0xb0b6c2),
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+    });
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(geo, mat.clone());
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 0.2 + Math.random() * 0.8;
+      mesh.position.set(
+        pos.x + Math.cos(angle) * dist,
+        0.2,
+        pos.z + Math.sin(angle) * dist
+      );
+      scene3D?.add(mesh);
+      activeParticles3D.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * (0.02 + Math.random() * 0.04),
+          0.01 + Math.random() * 0.03,
+          Math.sin(angle) * (0.02 + Math.random() * 0.04)
+        ),
+        life: 0.7,
+        decay: 0.02 + Math.random() * 0.02,
+      });
+    }
+  };
+
+  const spawnSoundwaveRing3D = (pos: THREE.Vector3, colorHex: string) => {
+    const geo = new THREE.RingGeometry(0.1, 0.12, 32);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(colorHex),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    if (camera3D) {
+      mesh.lookAt(camera3D.position);
+    }
+    scene3D?.add(mesh);
+    activeParticles3D.push({
+      mesh,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 0.8,
+      decay: 0.03,
+    });
+  };
+
+  function drawSpeedLines(canvasOverlay: HTMLCanvasElement) {
+    const sCtx = canvasOverlay.getContext("2d");
+    if (!sCtx) return;
+    sCtx.clearRect(0, 0, W, H);
+    
+    sCtx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    sCtx.lineWidth = 1.5;
+    
+    const centerX = W / 2;
+    const centerY = H / 2;
+    const count = 35;
+    
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const len = 40 + Math.random() * 80;
+      const startDist = 180 + Math.random() * 100;
+      
+      const x1 = centerX + Math.cos(angle) * startDist;
+      const y1 = centerY + Math.sin(angle) * startDist;
+      const x2 = centerX + Math.cos(angle) * (startDist + len);
+      const y2 = centerY + Math.sin(angle) * (startDist + len);
+      
+      sCtx.beginPath();
+      sCtx.moveTo(x1, y1);
+      sCtx.lineTo(x2, y2);
+      sCtx.stroke();
+    }
+  }
+
   const spawnSwirlParticle3D = (center: THREE.Vector3, colorHex: string) => {
     const geo = new THREE.SphereGeometry(0.05, 4, 4);
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex), transparent: true, opacity: 0.9 });
@@ -1024,6 +1234,7 @@ export function playBattle(
           camShake = Math.max(camShake, 0.8);
           spawnBurst3D(foe3D.model.position, "#39ff14", 15, 0.15);
           spawnImpactRing3D(foe3D.model.position, "#39ff14");
+          spawnDustCloud3D(foe3D.model.position, 10);
           createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#39ff14", 26);
         }
       });
@@ -1038,6 +1249,7 @@ export function playBattle(
       camShake = Math.max(camShake, 0.9);
       spawnBurst3D(foe3D.model.position, "#c39bff", 15, 0.16);
       spawnImpactRing3D(foe3D.model.position, "#c39bff");
+      spawnDustCloud3D(foe3D.model.position, 10);
       createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#c39bff", 26);
     } else if (e.ability === "leech") {
       const startPos = atk3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
@@ -1050,6 +1262,7 @@ export function playBattle(
       camShake = Math.max(camShake, 0.7);
       spawnBurst3D(foe3D.model.position, "#ff3b30", 12, 0.12);
       spawnImpactRing3D(foe3D.model.position, "#ff3b30");
+      spawnDustCloud3D(foe3D.model.position, 8);
       createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ff3b30", 26);
     } else if (e.ability === "charge") {
       triggerLungeStrike(e.by, 1.8, () => {
@@ -1060,6 +1273,7 @@ export function playBattle(
         camShake = Math.max(camShake, 1.2);
         spawnBurst3D(foe3D.model.position, "#ffae19", 18, 0.22);
         spawnImpactRing3D(foe3D.model.position, "#ffae19");
+        spawnDustCloud3D(foe3D.model.position, 12);
         createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ffae19", 26);
       });
     } else {
@@ -1091,6 +1305,7 @@ export function playBattle(
             camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
             spawnBurst3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 18 : 10, e.crit ? 0.2 : 0.12);
             spawnImpactRing3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b");
+            spawnDustCloud3D(foe3D.model.position, e.crit ? 12 : 6);
             sfxHit(e.crit);
             createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), e.crit ? `${e.dmg}!` : `${e.dmg}`, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 38 : 28);
           });
@@ -1453,6 +1668,17 @@ export function playBattle(
     if (use3D) {
       if (hudOverlay) {
         hudOverlay.remove();
+      }
+      if (speedLinesCanvas) {
+        speedLinesCanvas.remove();
+      }
+      for (let i = 0; i < 3; i++) {
+        const ray = scene3D?.getObjectByName(`light_ray_${i}`);
+        if (ray instanceof THREE.Mesh) {
+          scene3D?.remove(ray);
+          ray.geometry.dispose();
+          (ray.material as THREE.Material).dispose();
+        }
       }
       if (fighters3D && scene3D) {
         scene3D.remove(fighters3D.a.model);

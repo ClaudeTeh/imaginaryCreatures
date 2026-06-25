@@ -16,24 +16,266 @@ function colorsFor(animalId: string): PartColors {
   return ANIMAL_COLORS[animalId] ?? ANIMAL_COLORS.boar;
 }
 
-function mat(hex: string, opts: { rough?: number; metal?: number; emissive?: string; emissiveI?: number } = {}) {
-  return new THREE.MeshStandardMaterial({
+let currentBuilderAnimalId: string | null = null;
+
+const textureCache = new Map<string, THREE.CanvasTexture>();
+
+function createProceduralTexture(animalId: string, baseHex: string, accentHex: string): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  switch (animalId) {
+    case "cobra":
+    case "eel": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 3;
+      const scaleSize = 32;
+      for (let y = -scaleSize; y < 256 + scaleSize; y += scaleSize / 2) {
+        const shift = (Math.floor(y / (scaleSize / 2)) % 2) * (scaleSize / 2);
+        for (let x = -scaleSize; x < 256 + scaleSize; x += scaleSize) {
+          ctx.beginPath();
+          ctx.arc(x + shift + scaleSize / 2, y, scaleSize / 2, 0, Math.PI);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case "tiger": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = "#121212";
+      for (let i = 0; i < 8; i++) {
+        const y = 20 + i * 32 + Math.random() * 8;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.quadraticCurveTo(80, y + 15, 120, y + 5);
+        ctx.quadraticCurveTo(80, y + 25, 0, y + 30);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(256, y + 10);
+        ctx.quadraticCurveTo(176, y + 25, 136, y + 15);
+        ctx.quadraticCurveTo(176, y + 35, 256, y + 40);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+    case "ant":
+    case "scorpion": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 256; y += 32) {
+        const grad = ctx.createLinearGradient(0, y, 0, y + 32);
+        grad.addColorStop(0, accentHex);
+        grad.addColorStop(0.3, baseHex);
+        grad.addColorStop(0.7, baseHex);
+        grad.addColorStop(1, accentHex);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, y, 256, 28);
+      }
+      break;
+    }
+    case "eagle": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      const rowHeight = 24;
+      for (let y = 0; y < 256 + rowHeight; y += rowHeight) {
+        const offset = (Math.floor(y / rowHeight) % 2) * 20;
+        for (let x = -20; x < 256 + 20; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x + offset, y);
+          ctx.lineTo(x + offset + 20, y + 15);
+          ctx.lineTo(x + offset + 40, y);
+          ctx.lineTo(x + offset + 20, y - 5);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    case "boar":
+    case "rhino": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      for (let i = 0; i < 250; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const r = 1.5 + Math.random() * 2.5;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case "wolf":
+    case "bear":
+    case "rabbit": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 350; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const len = 4 + Math.random() * 7;
+        const angle = Math.PI / 4 + (Math.random() - 0.5) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+        ctx.stroke();
+      }
+      break;
+    }
+    default: {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      ctx.globalAlpha = 0.15;
+      for (let i = 0; i < 100; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const r = 2 + Math.random() * 4;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+      break;
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  return tex;
+}
+
+function getProceduralTexture(animalId: string, baseHex: string, accentHex: string): THREE.CanvasTexture {
+  const key = `${animalId}_${baseHex}_${accentHex}`;
+  let tex = textureCache.get(key);
+  if (!tex) {
+    tex = createProceduralTexture(animalId, baseHex, accentHex);
+    textureCache.set(key, tex);
+  }
+  return tex;
+}
+
+function applyToonOutline(mesh: THREE.Mesh, width = 0.04) {
+  if (!mesh.geometry) return;
+  if (mesh.getObjectByName("toon_outline")) return;
+  const outlineGeo = mesh.geometry.clone();
+  const outlineMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0x0a0a14),
+    side: THREE.BackSide,
+  });
+  const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
+  outlineMesh.name = "toon_outline";
+
+  outlineGeo.computeBoundingSphere();
+  const radius = outlineGeo.boundingSphere ? outlineGeo.boundingSphere.radius : 1.0;
+  const r = Math.max(0.05, radius);
+  const inflationFactor = 1.0 + (width / r);
+  outlineMesh.scale.setScalar(inflationFactor);
+  mesh.add(outlineMesh);
+}
+
+function mat(
+  hex: string,
+  opts: {
+    rough?: number;
+    metal?: number;
+    emissive?: string;
+    emissiveI?: number;
+    noTexture?: boolean;
+  } = {}
+) {
+  const params: THREE.MeshStandardMaterialParameters = {
     color: new THREE.Color(hex),
     roughness: opts.rough ?? 0.55,
     metalness: opts.metal ?? 0.15,
     emissive: opts.emissive ? new THREE.Color(opts.emissive) : new THREE.Color(0x000000),
     emissiveIntensity: opts.emissiveI ?? 0,
-  });
+  };
+
+  if (currentBuilderAnimalId && !opts.noTexture) {
+    const c = colorsFor(currentBuilderAnimalId);
+    params.map = getProceduralTexture(currentBuilderAnimalId, hex, c.accent || c.shade);
+    params.color = new THREE.Color(0xffffff);
+  }
+
+  return new THREE.MeshStandardMaterial(params);
 }
 
-function sphere(r: number, c: string, opts = {}) {
-  return new THREE.Mesh(new THREE.SphereGeometry(r, 22, 18), mat(c, opts));
+function sphere(
+  r: number,
+  c: string,
+  opts: {
+    rough?: number;
+    metal?: number;
+    emissive?: string;
+    emissiveI?: number;
+    noOutline?: boolean;
+    noTexture?: boolean;
+  } = {}
+) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 22, 18), mat(c, opts));
+  if (!opts.noOutline) {
+    applyToonOutline(mesh);
+  }
+  return mesh;
 }
-function cone(r: number, h: number, c: string, opts = {}) {
-  return new THREE.Mesh(new THREE.ConeGeometry(r, h, 16), mat(c, opts));
+
+function cone(
+  r: number,
+  h: number,
+  c: string,
+  opts: {
+    rough?: number;
+    metal?: number;
+    emissive?: string;
+    emissiveI?: number;
+    noOutline?: boolean;
+    noTexture?: boolean;
+  } = {}
+) {
+  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 16), mat(c, opts));
+  if (!opts.noOutline) {
+    applyToonOutline(mesh);
+  }
+  return mesh;
 }
-function cyl(rt: number, rb: number, h: number, c: string, opts = {}) {
-  return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat(c, opts));
+
+function cyl(
+  rt: number,
+  rb: number,
+  h: number,
+  c: string,
+  opts: {
+    rough?: number;
+    metal?: number;
+    emissive?: string;
+    emissiveI?: number;
+    noOutline?: boolean;
+    noTexture?: boolean;
+  } = {}
+) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat(c, opts));
+  if (!opts.noOutline) {
+    applyToonOutline(mesh);
+  }
+  return mesh;
 }
 
 export function createSoftShadowMesh(): THREE.Mesh {
@@ -65,11 +307,11 @@ export function createSoftShadowMesh(): THREE.Mesh {
 /** A pair of eyes parented to the head, looking forward (+Z). */
 function addEyes(head: THREE.Object3D, y: number, z: number, r = 0.09) {
   for (const s of [-1, 1] as const) {
-    const white = sphere(r, "#ffffff", { rough: 0.2 });
+    const white = sphere(r, "#ffffff", { rough: 0.2, noOutline: true, noTexture: true });
     white.name = `eye_${s === 1 ? "r" : "l"}`;
     white.position.set(s * 0.22, y, z);
     head.add(white);
-    const pupil = sphere(r * 0.55, "#0a0a0a", { rough: 0.1 });
+    const pupil = sphere(r * 0.55, "#0a0a0a", { rough: 0.1, noOutline: true, noTexture: true });
     pupil.name = `pupil_${s === 1 ? "r" : "l"}`;
     pupil.position.set(s * 0.22, y, z + r * 0.7);
     head.add(pupil);
@@ -244,6 +486,14 @@ function buildHead(animalId: string): THREE.Group {
     }
   });
 
+  // Lower jaw segment (grows/moves down during roars/attacks)
+  const lowerJaw = sphere(0.22, c.fill);
+  lowerJaw.name = "lower_jaw";
+  lowerJaw.scale.set(1.0, 0.4, 1.25);
+  lowerJaw.position.set(0, -0.28, 0.22);
+  lowerJaw.castShadow = true;
+  g.add(lowerJaw);
+
   const ears = (h: number, w: number, tilt: number, col = c.fill) => {
     for (const s of [-1, 1] as const) {
       const ear = cone(w, h, col);
@@ -254,7 +504,7 @@ function buildHead(animalId: string): THREE.Group {
   };
   const horns = (len: number, col = c.accent) => {
     for (const s of [-1, 1] as const) {
-      const horn = cone(0.1, len, col, { rough: 0.4 });
+      const horn = cone(0.1, len, col, { rough: 0.4, noTexture: true });
       horn.position.set(s * 0.3, 0.55, 0.2);
       horn.rotation.z = -s * 0.4;
       g.add(horn);
@@ -262,7 +512,23 @@ function buildHead(animalId: string): THREE.Group {
   };
 
   switch (animalId) {
-    case "rabbit": ears(0.7, 0.16, 0.05, c.fill); break;
+    case "rabbit": {
+      for (const s of [-1, 1] as const) {
+        const side = s === 1 ? "r" : "l";
+        const ear0 = cyl(0.14, 0.16, 0.35, c.fill);
+        ear0.name = `ear_${side}_0`;
+        ear0.position.set(s * 0.32, 0.55, -0.05);
+        ear0.rotation.z = -s * 0.05;
+        
+        const ear1 = cone(0.12, 0.35, c.fill);
+        ear1.name = `ear_${side}_1`;
+        ear1.position.set(0, 0.35, 0);
+        
+        ear0.add(ear1);
+        g.add(ear0);
+      }
+      break;
+    }
     case "wolf": ears(0.34, 0.2, 0.5); break;
     case "tiger": {
       ears(0.26, 0.22, 0.7); 
@@ -279,26 +545,26 @@ function buildHead(animalId: string): THREE.Group {
       break;
     }
     case "boar": {
-      // tusks
+      // tusks (parented to lower jaw so they open/close with it)
       for (const s of [-1, 1] as const) {
-        const tusk = cone(0.06, 0.4, "#e8e0c0", { rough: 0.3 });
-        tusk.position.set(s * 0.18, -0.2, 0.55);
+        const tusk = cone(0.06, 0.4, "#e8e0c0", { rough: 0.3, noTexture: true });
+        tusk.position.set(s * 0.18, 0.12, 0.3);
         tusk.rotation.set(0.6, 0, s * 0.3);
-        g.add(tusk);
+        lowerJaw.add(tusk);
       }
       const snout = sphere(0.32, c.shade); snout.scale.set(1, 0.8, 0.9); snout.position.set(0, -0.1, 0.55); g.add(snout);
       break;
     }
     case "rhino": {
       // Rhino double horns
-      const noseHorn = cone(0.16, 0.7, c.accent, { rough: 0.4 });
+      const noseHorn = cone(0.16, 0.7, c.accent, { rough: 0.4, noTexture: true });
       noseHorn.position.set(0, 0.05, 0.7); noseHorn.rotation.x = 1.35; g.add(noseHorn);
-      const smallHorn = cone(0.1, 0.34, c.accent, { rough: 0.4 });
+      const smallHorn = cone(0.1, 0.34, c.accent, { rough: 0.4, noTexture: true });
       smallHorn.position.set(0, 0.32, 0.52); smallHorn.rotation.x = 1.25; g.add(smallHorn);
       break;
     }
     case "eagle": {
-      const beak = cone(0.18, 0.5, "#f0b020", { rough: 0.3 });
+      const beak = cone(0.18, 0.5, "#f0b020", { rough: 0.3, noTexture: true });
       beak.position.set(0, -0.05, 0.62); beak.rotation.x = 1.4; g.add(beak);
       
       // Feather crest
@@ -315,7 +581,7 @@ function buildHead(animalId: string): THREE.Group {
       const hood = sphere(0.55, c.fill); hood.scale.set(1.5, 1.4, 0.3); hood.position.set(0, 0.1, -0.2); g.add(hood);
       // fangs
       for (const s of [-1, 1] as const) {
-        const fang = cone(0.04, 0.22, "#ffffff");
+        const fang = cone(0.04, 0.22, "#ffffff", { noTexture: true });
         fang.position.set(s * 0.15, -0.22, 0.52);
         fang.rotation.x = -0.2;
         g.add(fang);
@@ -326,17 +592,17 @@ function buildHead(animalId: string): THREE.Group {
     case "scorpion": {
       // mandibles + antennae
       for (const s of [-1, 1] as const) {
-        const m = cyl(0.03, 0.05, 0.4, c.shade); m.position.set(s * 0.18, -0.25, 0.5); m.rotation.x = 1.1; g.add(m);
+        const m = cyl(0.03, 0.05, 0.4, c.shade, { noTexture: true }); m.position.set(s * 0.18, -0.25, 0.5); m.rotation.x = 1.1; g.add(m);
       }
       if (animalId === "ant") for (const s of [-1, 1] as const) {
-        const ant = cyl(0.02, 0.02, 0.5, c.accent); ant.position.set(s * 0.18, 0.6, 0.2); ant.rotation.z = -s * 0.4; g.add(ant);
+        const ant = cyl(0.02, 0.02, 0.5, c.accent, { noTexture: true }); ant.position.set(s * 0.18, 0.6, 0.2); ant.rotation.z = -s * 0.4; g.add(ant);
       }
       break;
     }
     case "gorilla":
     case "gecko": horns(0.0001); break; // none — keep plain rounded head
     case "eel": {
-      const fin = cone(0.12, 0.4, c.accent, { emissive: c.accent, emissiveI: 0.4 });
+      const fin = cone(0.12, 0.4, c.accent, { emissive: c.accent, emissiveI: 0.4, noTexture: true });
       fin.position.set(0, 0.6, -0.1); g.add(fin); break;
     }
     default: ears(0.3, 0.16, 0.4);
@@ -373,6 +639,7 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       wingMesh.material.side = THREE.DoubleSide;
       wingMesh.castShadow = true;
       wingGroup.add(wingMesh);
+      applyToonOutline(wingMesh);
 
       wingGroup.position.set(s * 0.65, 0.2, -0.15);
       g.add(wingGroup);
@@ -396,12 +663,12 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       clawBase.castShadow = true;
       legGroup.add(clawBase);
 
-      const f1 = cone(0.08, 0.36, c.accent, { metal: 0.5, rough: 0.25 });
+      const f1 = cone(0.08, 0.36, c.accent, { metal: 0.5, rough: 0.25, noTexture: true });
       f1.position.set(s * 1.15, -0.65, z + 0.36);
       f1.rotation.set(0.4, 0, -s * 0.5);
       legGroup.add(f1);
 
-      const f2 = cone(0.06, 0.3, c.shade, { metal: 0.5, rough: 0.25 });
+      const f2 = cone(0.06, 0.3, c.shade, { metal: 0.5, rough: 0.25, noTexture: true });
       f2.position.set(s * 0.95, -0.72, z + 0.3);
       f2.rotation.set(0.6, 0, s * 0.2);
       legGroup.add(f2);
@@ -426,12 +693,12 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       clawBase.scale.set(1.0, 0.7, 1.25);
       legGroup.add(clawBase);
 
-      const f1 = cone(0.06, 0.3, c.accent, { metal: 0.6, rough: 0.25 });
+      const f1 = cone(0.06, 0.3, c.accent, { metal: 0.6, rough: 0.25, noTexture: true });
       f1.position.set(s * 1.1, -0.75, z + 0.42);
       f1.rotation.set(0.3, 0, -s * 0.3);
       legGroup.add(f1);
 
-      const f2 = cone(0.05, 0.24, c.shade, { metal: 0.6, rough: 0.25 });
+      const f2 = cone(0.05, 0.24, c.shade, { metal: 0.6, rough: 0.25, noTexture: true });
       f2.position.set(s * 0.9, -0.8, z + 0.38);
       f2.rotation.set(0.5, 0, s * 0.1);
       legGroup.add(f2);
@@ -502,6 +769,7 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       const shinMesh = new THREE.Mesh(shinGeo, mat(c.fill, { rough: 0.78 }));
       shinMesh.castShadow = true;
       legGroup.add(shinMesh);
+      applyToonOutline(shinMesh);
 
       const knee = sphere(0.14, c.fill, { rough: 0.78 });
       knee.position.copy(mid);
@@ -536,6 +804,7 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       const tubeMesh = new THREE.Mesh(tubeGeo, mat(c.fill, { rough: 0.8 }));
       tubeMesh.castShadow = true;
       legGroup.add(tubeMesh);
+      applyToonOutline(tubeMesh);
 
       const elbow = sphere(0.24, c.fill, { rough: 0.8 });
       elbow.position.copy(mid);
@@ -568,6 +837,7 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     const tubeMesh = new THREE.Mesh(tubeGeo, mat(c.fill, { rough: 0.6 }));
     tubeMesh.castShadow = true;
     legGroup.add(tubeMesh);
+    applyToonOutline(tubeMesh);
     
     const knee = sphere(0.16, c.fill, { rough: 0.6 });
     knee.position.copy(midPoint);
@@ -582,7 +852,7 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     // claws for predatory forelimbs
     if (front && ["bear", "tiger", "gorilla", "crab", "scorpion"].includes(animalId)) {
       for (const cl of [-1, 0, 1]) {
-        const claw = cone(0.04, 0.18, c.accent, { rough: 0.3 });
+        const claw = cone(0.04, 0.18, c.accent, { rough: 0.3, noTexture: true });
         claw.position.set(endPoint.x + cl * 0.07, endPoint.y - 0.05, endPoint.z + 0.28);
         claw.rotation.x = 1.2;
         claw.castShadow = true;
@@ -705,11 +975,36 @@ export function buildCreatureModel(genome: Genome): THREE.Group {
   };
 
   const builders: Record<Slot, () => THREE.Group> = {
-    body: () => buildBody(genome.body),
-    head: () => buildHead(genome.head),
-    forelimbs: () => buildLimbs(genome.forelimbs, true),
-    hindlimbs: () => buildLimbs(genome.hindlimbs, false),
-    tail: () => buildTail(genome.tail),
+    body: () => {
+      currentBuilderAnimalId = genome.body;
+      const res = buildBody(genome.body);
+      currentBuilderAnimalId = null;
+      return res;
+    },
+    head: () => {
+      currentBuilderAnimalId = genome.head;
+      const res = buildHead(genome.head);
+      currentBuilderAnimalId = null;
+      return res;
+    },
+    forelimbs: () => {
+      currentBuilderAnimalId = genome.forelimbs;
+      const res = buildLimbs(genome.forelimbs, true);
+      currentBuilderAnimalId = null;
+      return res;
+    },
+    hindlimbs: () => {
+      currentBuilderAnimalId = genome.hindlimbs;
+      const res = buildLimbs(genome.hindlimbs, false);
+      currentBuilderAnimalId = null;
+      return res;
+    },
+    tail: () => {
+      currentBuilderAnimalId = genome.tail;
+      const res = buildTail(genome.tail);
+      currentBuilderAnimalId = null;
+      return res;
+    },
   };
 
   for (const slot of SLOTS) {
@@ -720,7 +1015,9 @@ export function buildCreatureModel(genome: Genome): THREE.Group {
   }
 
   // a neck bridge in the body's colour to tie head to torso
+  currentBuilderAnimalId = genome.body;
   const neck = sphere(0.4, colorsFor(genome.body).fill);
+  currentBuilderAnimalId = null;
   neck.name = "neck";
   neck.scale.set(0.8, 0.9, 0.8);
   neck.position.set(0, 1.85, 0.55);
@@ -955,6 +1252,37 @@ export function mountCreature3D(
       const targetHeadRotX = mouseNormalized.y * 0.4 + Math.sin(t * 1.2) * 0.03;
       head.rotation.y += (targetHeadRotY - head.rotation.y) * 0.1;
       head.rotation.x += (targetHeadRotX - head.rotation.x) * 0.1;
+    }
+
+    // Update rabbit ears physics (spring bounce)
+    const earL0 = model.getObjectByName("ear_l_0");
+    const earL1 = model.getObjectByName("ear_l_1");
+    const earR0 = model.getObjectByName("ear_r_0");
+    const earR1 = model.getObjectByName("ear_r_1");
+    if (earL0 && earR0) {
+      const bounceX = Math.sin(t * 4.0) * 0.08;
+      const bounceZ = Math.cos(t * 3.0) * 0.05;
+      
+      earL0.rotation.x = bounceX;
+      earL0.rotation.z = -0.05 + bounceZ;
+      if (earL1) {
+        earL1.rotation.x = bounceX * 1.5;
+        earL1.rotation.z = bounceZ * 0.8;
+      }
+
+      earR0.rotation.x = bounceX;
+      earR0.rotation.z = 0.05 - bounceZ;
+      if (earR1) {
+        earR1.rotation.x = bounceX * 1.5;
+        earR1.rotation.z = -bounceZ * 0.8;
+      }
+    }
+
+    // Animate lower jaw chew/yawn
+    const lowerJaw = model.getObjectByName("lower_jaw");
+    if (lowerJaw) {
+      const mouthOpen = Math.max(0, Math.sin(t * 1.5) * 0.08);
+      lowerJaw.rotation.x = mouthOpen;
     }
 
     // Eye blinking
