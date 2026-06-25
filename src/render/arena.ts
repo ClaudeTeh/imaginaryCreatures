@@ -50,10 +50,12 @@ const GROUND_Y = 300;
  * deterministic event log produced by the simulator, so what you see is exactly
  * what was computed.
  */
+/** speedMult > 1 = faster, < 1 = slower, 0 = instant. */
 export function playBattle(
   canvas: HTMLCanvasElement,
   result: BattleResult,
   onDone: (winner: Side | "draw") => void,
+  speedMult = 1,
 ): () => void {
   // High-DPI: render at device pixel ratio for a crisp image, but keep drawing
   // in logical W×H coordinates by scaling the context.
@@ -84,10 +86,10 @@ export function playBattle(
   const ordered = [...result.events].sort((x, y) => x.t - y.t);
   let cursor = 0;
   let currentTick = 0;
-  // Reduced motion: resolve the battle near-instantly with no shake/particles.
-  const durationFrames = reduceMotion
-    ? clamp(result.ticks, 20, 50)
-    : clamp(result.ticks, 200, 460);
+  const instant = speedMult === 0 || reduceMotion;
+  const durationFrames = instant
+    ? clamp(result.ticks, 1, 20)
+    : clamp(Math.round(clamp(result.ticks, 200, 460) / speedMult), 1, 1200);
   const ticksPerFrame = result.ticks / durationFrames;
   let raf = 0;
   let frame = 0;
@@ -219,7 +221,7 @@ export function playBattle(
   }
 
   function spawnBurst(f: FighterView, color: string, count: number, power: number) {
-    if (reduceMotion) return;
+    if (instant) return;
     const cx = f.baseX;
     const cy = GROUND_Y - 60;
     for (let i = 0; i < count; i++) {

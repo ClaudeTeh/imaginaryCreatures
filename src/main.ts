@@ -6,7 +6,7 @@ import { ANIMALS, getAnimal } from "./data/animals";
 import { breed, randomGenome } from "./genome/breed";
 import { buildCreature, powerRating, slotLabel } from "./genome/genome";
 import { makeOpponent } from "./game/opponents";
-import { load, save, unlockNext, type GameState } from "./game/state";
+import { load, newGame, save, unlockNext, type BattleSpeed, type GameState } from "./game/state";
 import { addToRoster, isInRoster, removeFromRoster } from "./game/roster";
 import { clear, el } from "./render/dom";
 import { creatureCard } from "./render/creatureCard";
@@ -15,6 +15,14 @@ import { initAudio, setMuted, sfxLose, sfxWin, toggleMuted } from "./render/soun
 
 let state: GameState = load();
 let cancelArena: (() => void) | null = null;
+let newGameExpanded = false;
+
+const SPEED_OPTS: { id: BattleSpeed; label: string; mult: number }[] = [
+  { id: "slow", label: "🐢 Slow", mult: 0.4 },
+  { id: "normal", label: "▶ Normal", mult: 1 },
+  { id: "fast", label: "⚡ Fast", mult: 3 },
+  { id: "instant", label: "⏩ Instant", mult: 0 },
+];
 
 setMuted(state.muted);
 
@@ -74,6 +82,102 @@ function topbar(): HTMLElement {
 
 function pillFrag(label: string, value: number): HTMLElement {
   return el("span", { html: `${label} <b>${value}</b>` });
+}
+
+function settingsBar(): HTMLElement {
+  const speedBtns = SPEED_OPTS.map(({ id, label, mult }) =>
+    el(
+      "button",
+      {
+        class: state.battleSpeed === id ? "settings-btn active" : "settings-btn",
+        onclick: () => {
+          state.battleSpeed = id;
+          save(state);
+          renderLab();
+        },
+        title: `Battle speed: ${id} (${mult === 0 ? "instant" : mult + "×"})`,
+      },
+      [label],
+    ),
+  );
+
+  const oppBtn = el(
+    "button",
+    {
+      class: state.showOpponent ? "settings-btn active" : "settings-btn",
+      onclick: () => {
+        state.showOpponent = !state.showOpponent;
+        save(state);
+        renderLab();
+      },
+    },
+    [state.showOpponent ? "🔭 Opponent" : "🔭 Opponent (hidden)"],
+  );
+
+  const newGameBtn = el(
+    "button",
+    {
+      class: newGameExpanded ? "settings-btn active" : "settings-btn",
+      onclick: () => {
+        newGameExpanded = !newGameExpanded;
+        renderLab();
+      },
+    },
+    ["🗑 New Game"],
+  );
+
+  const row = el("div", { class: "settings-bar" }, [
+    el("div", { class: "settings-group" }, [
+      el("span", { class: "settings-label" }, ["Speed"]),
+      ...speedBtns,
+    ]),
+    el("div", { class: "settings-group" }, [oppBtn]),
+    el("div", { class: "settings-group" }, [newGameBtn]),
+  ]);
+
+  if (newGameExpanded) {
+    const tierBtns = (
+      [
+        { tier: 1 as const, label: "🌱 Tier 1 (5 species)" },
+        { tier: 2 as const, label: "🔥 Tier 1+2 (10 species)" },
+        { tier: 3 as const, label: "💀 All species unlocked" },
+      ] as const
+    ).map(({ tier, label }) =>
+      el(
+        "button",
+        {
+          class: "settings-btn",
+          onclick: () => {
+            if (!confirm(`Start a new game at ${label}? Current progress will be lost.`)) return;
+            newGameExpanded = false;
+            state = newGame(tier, state);
+            save(state);
+            renderLab();
+          },
+        },
+        [label],
+      ),
+    );
+    row.append(
+      el("div", { class: "settings-newgame" }, [
+        el("span", { class: "settings-label" }, ["Pick start tier:"]),
+        ...tierBtns,
+        el(
+          "button",
+          {
+            class: "settings-btn",
+            onclick: () => {
+              newGameExpanded = false;
+              renderLab();
+            },
+          },
+          ["✕ Cancel"],
+        ),
+      ]),
+    );
+  }
+
+  return row;
 }
 
 function renderLab() {
@@ -146,12 +250,14 @@ function renderLab() {
     ]),
   ]);
 
-  app.append(
+  const sections: Node[] = [
     topbar(),
+    settingsBar(),
     el("div", { class: "layout" }, [builder, preview]),
-    opponentPanel(creature),
-    rosterPanel(),
-  );
+  ];
+  if (state.showOpponent) sections.push(opponentPanel(creature));
+  sections.push(rosterPanel());
+  app.append(...sections);
 }
 
 function opponentPanel(player: ReturnType<typeof buildCreature>): HTMLElement {
@@ -269,10 +375,11 @@ function startBattle() {
     ]),
   );
 
+  const speedMult = SPEED_OPTS.find((s) => s.id === state.battleSpeed)?.mult ?? 1;
   cancelArena = playBattle(canvas, result, (winner) => {
     cancelArena = null;
     showResult(resultArea, winner, opponent.name);
-  });
+  }, speedMult);
 }
 
 function showResult(area: HTMLElement, winner: Side | "draw", opponentName: string) {

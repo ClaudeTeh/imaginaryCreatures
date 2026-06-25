@@ -290,6 +290,53 @@ button:disabled {
   color: var(--muted);
 }
 
+/* Settings bar */
+.settings-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.settings-newgame {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.settings-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-group + .settings-group {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+.settings-label {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.settings-btn {
+  padding: 6px 11px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.settings-btn.active {
+  background: linear-gradient(180deg, var(--accent-2) 0%, #4f74e0 100%);
+  color: #061026;
+  border-color: transparent;
+  font-weight: 700;
+}
+
 /* Arena */
 .arena-wrap {
   display: flex;

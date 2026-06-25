@@ -6,6 +6,8 @@ import type { SavedCreature } from "./roster";
 
 const SAVE_KEY = "imaginary-creatures.save.v1";
 
+export type BattleSpeed = "slow" | "normal" | "fast" | "instant";
+
 export interface GameState {
   unlocked: string[];
   player: Genome;
@@ -15,6 +17,8 @@ export interface GameState {
   seed: number;
   muted: boolean;
   roster: SavedCreature[];
+  battleSpeed: BattleSpeed;
+  showOpponent: boolean;
 }
 
 /** Animals available at the start; the rest unlock by winning. */
@@ -25,15 +29,24 @@ export const UNLOCK_ORDER = ANIMALS.filter((a) => !STARTERS.includes(a.id))
   .sort((a, b) => a.tier - b.tier)
   .map((a) => a.id);
 
-export function newGame(): GameState {
+/** Returns ids of all animals up to and including the given tier. */
+function animalsUpToTier(maxTier: 1 | 2 | 3): string[] {
+  return ANIMALS.filter((a) => a.tier <= maxTier).map((a) => a.id);
+}
+
+export function newGame(startTier: 1 | 2 | 3 = 1, currentState?: Partial<GameState>): GameState {
+  const unlocked = startTier === 1 ? [...STARTERS] : animalsUpToTier(startTier);
+  const startAnimal = unlocked[unlocked.length - 1] ?? "boar";
   return {
-    unlocked: [...STARTERS],
-    player: pureGenome("boar"),
+    unlocked,
+    player: pureGenome(startAnimal),
     wins: 0,
     losses: 0,
     seed: randomSeed(),
-    muted: false,
+    muted: currentState?.muted ?? false,
     roster: [],
+    battleSpeed: currentState?.battleSpeed ?? "normal",
+    showOpponent: currentState?.showOpponent ?? true,
   };
 }
 
@@ -53,6 +66,10 @@ export function load(): GameState {
       seed: data.seed ?? randomSeed(),
       muted: data.muted ?? false,
       roster: sanitizeRoster(data.roster, validIds),
+      battleSpeed: (["slow", "normal", "fast", "instant"] as BattleSpeed[]).includes(data.battleSpeed as BattleSpeed)
+        ? (data.battleSpeed as BattleSpeed)
+        : "normal",
+      showOpponent: data.showOpponent ?? true,
     };
   } catch {
     return newGame();
