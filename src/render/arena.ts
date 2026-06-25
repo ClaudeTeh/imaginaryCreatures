@@ -191,6 +191,8 @@ export function playBattle(
     renderer3D.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer3D.shadowMap.enabled = true;
     renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer3D.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer3D.toneMappingExposure = 1.25;
 
     scene3D = new THREE.Scene();
     scene3D.background = new THREE.Color(0x0e1730);
