@@ -1,5 +1,6 @@
 import type { BattleEvent, BattleResult, Side } from "../combat/combat";
 import { sfxAbility, sfxHeal, sfxHit } from "./sound";
+import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
 
 interface Particle {
   x: number;
@@ -337,49 +338,47 @@ export function playBattle(
       ctx.rotate(-hit * 0.14);
     }
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
     // Draw back-to-front: tail → hindlimbs → body → forelimbs → head
+    // Each part drawn in local space; we translate to its anatomical position.
 
-    // TAIL — wags continuously, retreats slightly when attacking
-    const tailWag = Math.sin(t * 0.18) * 9;
+    const SCALE = 0.52; // overall creature size
+
+    // TAIL — wags behind the body
     ctx.save();
-    ctx.translate(-48 - atk * 8, -6 + tailWag * 0.25);
-    ctx.rotate(-0.22 + Math.sin(t * 0.18) * 0.18 + atk * 0.1);
-    ctx.font = "26px serif";
-    ctx.fillText(p.tail, 0, 0);
+    ctx.translate(-46 - atk * 8, -6);
+    ctx.rotate(-0.18 + Math.sin(t * 0.18) * 0.16);
+    ctx.scale(SCALE, SCALE);
+    drawTail(ctx, p.tail, t * 0.18);
     ctx.restore();
 
-    // HINDLIMBS — rear legs, coil down to push off during attack
+    // HINDLIMBS — rear legs, push off during attack
     ctx.save();
-    ctx.translate(-16 - atk * 6, 26 + atk * 7);
-    ctx.rotate(-0.05 + atk * 0.12);
-    ctx.font = "28px serif";
-    ctx.fillText(p.hindlimbs, 0, 0);
+    ctx.translate(-18 - atk * 6, 14 + atk * 7);
+    ctx.rotate(-0.04 + atk * 0.1);
+    ctx.scale(SCALE * 0.9, SCALE * 0.9);
+    drawHindlimbs(ctx, p.hindlimbs, atk);
     ctx.restore();
 
-    // BODY — breathing central mass
+    // BODY — central mass with breathing scale
     ctx.save();
-    ctx.scale(1 + breathe * 0.016, 1 - breathe * 0.010);
-    ctx.font = "56px serif";
-    ctx.fillText(p.body, -2, -6);
+    ctx.scale(SCALE * (1 + breathe * 0.016), SCALE * (1 - breathe * 0.01));
+    drawBody(ctx, p.body, breathe);
     ctx.restore();
 
-    // FORELIMBS — strike forward and rise on attack
+    // FORELIMBS — front limbs, surge forward and rise on attack
     ctx.save();
-    ctx.translate(22 + atk * 34, 16 - atk * 16);
-    ctx.rotate(atk * 0.75);
-    ctx.font = "32px serif";
-    ctx.fillText(p.forelimbs, 0, 0);
+    ctx.translate(20 + atk * 32, 14 - atk * 14);
+    ctx.rotate(atk * 0.6);
+    ctx.scale(SCALE * 0.9, SCALE * 0.9);
+    drawForelimbs(ctx, p.forelimbs, atk);
     ctx.restore();
 
-    // HEAD — thrust forward on attack, snap back on hit
+    // HEAD — front-right, thrust on attack, recoil on hit
     ctx.save();
-    ctx.translate(34 + atk * 20, -50 - atk * 14);
-    ctx.rotate(atk * 0.22 - hit * 0.18);
-    ctx.font = "40px serif";
-    ctx.fillText(p.head, 0, 0);
+    ctx.translate(32 + atk * 18, -40 - atk * 12);
+    ctx.rotate(atk * 0.2 - hit * 0.16);
+    ctx.scale(SCALE, SCALE);
+    drawHead(ctx, p.head, t * 0.18, atk);
     ctx.restore();
 
     ctx.restore();

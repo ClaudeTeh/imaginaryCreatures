@@ -2,6 +2,7 @@ import type { Creature, StatBlock } from "../core/types";
 import { ABILITIES, TRAITS } from "../data/abilities";
 import { powerRating } from "../genome/genome";
 import { el, statColor } from "./dom";
+import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
 
 const STAT_MAX: StatBlock = {
   health: 90,
@@ -55,24 +56,47 @@ export function creatureCard(c: Creature): HTMLElement {
     ]),
   );
 
-  // Composite body display: arrange part emojis in a rough creature silhouette.
-  // Row 1: head (centre)
-  // Row 2: forelimbs | body | hindlimbs
-  // Row 3: tail (centre)
-  const p = c.partEmojis;
-  const composite = el("div", { class: "composite-body", "aria-hidden": "true" }, [
-    el("div", { class: "cb-row cb-row-head" }, [
-      el("span", { class: "cb-part cb-head", title: "Head" }, [p.head]),
-    ]),
-    el("div", { class: "cb-row cb-row-mid" }, [
-      el("span", { class: "cb-part cb-fore", title: "Forelimbs" }, [p.forelimbs]),
-      el("span", { class: "cb-part cb-body", title: "Body" }, [p.body]),
-      el("span", { class: "cb-part cb-hind", title: "Hindlimbs" }, [p.hindlimbs]),
-    ]),
-    el("div", { class: "cb-row cb-row-tail" }, [
-      el("span", { class: "cb-part cb-tail", title: "Tail" }, [p.tail]),
-    ]),
-  ]);
+  // Canvas-drawn creature preview
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const SIZE = 100;
+  const canvas = el("canvas", {
+    width: String(SIZE * DPR),
+    height: String(SIZE * DPR),
+    style: `width:${SIZE}px;height:${SIZE}px`,
+    "aria-hidden": "true",
+    class: "creature-preview-canvas",
+  }) as HTMLCanvasElement;
+
+  requestAnimationFrame(() => {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(DPR, DPR);
+    const cx = SIZE / 2 + 4;
+    const cy = SIZE / 2 + 8;
+    const p = c.genome;
+    const SC = 0.48;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    // tail
+    ctx.save(); ctx.translate(-22, -2); ctx.rotate(-0.2); ctx.scale(SC, SC);
+    drawTail(ctx, p.tail, 0); ctx.restore();
+    // hindlimbs
+    ctx.save(); ctx.translate(-8, 10); ctx.scale(SC * 0.85, SC * 0.85);
+    drawHindlimbs(ctx, p.hindlimbs, 0); ctx.restore();
+    // body
+    ctx.save(); ctx.scale(SC, SC);
+    drawBody(ctx, p.body, 0); ctx.restore();
+    // forelimbs
+    ctx.save(); ctx.translate(10, 10); ctx.scale(SC * 0.85, SC * 0.85);
+    drawForelimbs(ctx, p.forelimbs, 0); ctx.restore();
+    // head
+    ctx.save(); ctx.translate(16, -18); ctx.scale(SC, SC);
+    drawHead(ctx, p.head, 0, 0); ctx.restore();
+    ctx.restore();
+  });
+
+  const composite = canvas;
 
   return el("div", { class: "creature-card fadein" }, [
     el("div", { class: "creature-head" }, [

@@ -124,14 +124,12 @@ try {
   await page.waitForTimeout(450); // let the fade-in settle for a true screenshot
   const barCount = await page.locator(".layout .creature-card .bar").count();
   if (barCount !== 5) throw new Error(`expected 5 stat bars on player card, got ${barCount}`);
-  // Composite body: check that the head part emoji is visible (not empty).
-  const headEmoji = (await page.textContent(".layout .cb-head"))?.trim();
-  if (!headEmoji) throw new Error("composite head emoji is empty");
-  const bodyEmoji = (await page.textContent(".layout .cb-body"))?.trim();
-  if (!bodyEmoji) throw new Error("composite body emoji is empty");
+  // Canvas creature preview should be rendered
+  const previewCount = await page.locator(".layout .creature-preview-canvas").count();
+  if (previewCount < 1) throw new Error("creature preview canvas is missing");
   const cardVisible = await page.locator(".layout .creature-card").isVisible();
   if (!cardVisible) throw new Error("creature card is not visible");
-  log(`returned to lab; card OK (head ${headEmoji}, body ${bodyEmoji}, ${barCount} bars)`);
+  log(`returned to lab; card OK (canvas preview present, ${barCount} bars)`);
 
   // Roster: save the current creature, confirm it appears, then load it back.
   await page.getByRole("button", { name: "💾 Save" }).click();
