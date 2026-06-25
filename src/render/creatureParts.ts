@@ -38,14 +38,41 @@ export const ANIMAL_COLORS: Record<string, PartColors> = {
 
 // ─── shared helpers ───────────────────────────────────────────────────────────
 
+/** Parse a #rrggbb hex into [r,g,b]. */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Mix a hex colour toward white (amt>0) or black (amt<0) by amt in [-1,1]. */
+function shade(hex: string, amt: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const t = amt < 0 ? 0 : 255;
+  const p = Math.abs(amt);
+  const mix = (c: number) => Math.round(c + (t - c) * p);
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+}
+
+/**
+ * Volumetric sphere shading. Light comes from the upper-left, so we build a
+ * five-stop radial: a hot specular highlight, the base fill, then a darkened
+ * core and a near-black rim — giving flat parts a sense of roundness and depth
+ * that reads much closer to a lit 3D form than a flat two-stop gradient.
+ */
 function radial(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number, r: number,
   inner: string, outer: string,
 ): CanvasGradient {
-  const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.05, cx, cy, r);
-  g.addColorStop(0, inner);
-  g.addColorStop(1, outer);
+  const lx = cx - r * 0.42;
+  const ly = cy - r * 0.42;
+  const g = ctx.createRadialGradient(lx, ly, r * 0.04, cx, cy, r * 1.06);
+  g.addColorStop(0, shade(inner, 0.55));   // specular hot-spot
+  g.addColorStop(0.22, shade(inner, 0.16)); // lit upper surface
+  g.addColorStop(0.62, inner);              // base colour
+  g.addColorStop(0.88, outer);              // shadowed lower surface
+  g.addColorStop(1, shade(outer, -0.35));   // dark rim / occlusion edge
   return g;
 }
 

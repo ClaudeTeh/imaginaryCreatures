@@ -2,7 +2,7 @@ import type { Creature, StatBlock } from "../core/types";
 import { ABILITIES, TRAITS } from "../data/abilities";
 import { powerRating } from "../genome/genome";
 import { el, statColor } from "./dom";
-import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
+import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail, ANIMAL_COLORS } from "./creatureParts";
 
 const STAT_MAX: StatBlock = {
   health: 90,
@@ -74,24 +74,36 @@ export function creatureCard(c: Creature): HTMLElement {
     const cx = SIZE / 2 + 4;
     const cy = SIZE / 2 + 8;
     const p = c.genome;
-    const SC = 0.48;
+    const SC = 0.66;
+    const col = ANIMAL_COLORS[p.body] ?? ANIMAL_COLORS.boar;
 
     ctx.save();
     ctx.translate(cx, cy);
+    ctx.scale(SC, SC);
     // tail
-    ctx.save(); ctx.translate(-22, -2); ctx.rotate(-0.2); ctx.scale(SC, SC);
+    ctx.save(); ctx.translate(-34, 0); ctx.rotate(-0.2);
     drawTail(ctx, p.tail, 0); ctx.restore();
     // hindlimbs
-    ctx.save(); ctx.translate(-8, 10); ctx.scale(SC * 0.85, SC * 0.85);
+    ctx.save(); ctx.translate(-20, 18); ctx.scale(0.92, 0.92);
     drawHindlimbs(ctx, p.hindlimbs, 0); ctx.restore();
+    // connector (torso → neck → head) keeps the parts joined
+    ctx.save();
+    ctx.fillStyle = col.fill; ctx.strokeStyle = col.shade; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-6, 6);
+    ctx.quadraticCurveTo(20, -2, 26, -26);
+    ctx.quadraticCurveTo(30, -34, 22, -34);
+    ctx.quadraticCurveTo(8, -26, 2, -6);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
     // body
-    ctx.save(); ctx.scale(SC, SC);
+    ctx.save();
     drawBody(ctx, p.body, 0); ctx.restore();
     // forelimbs
-    ctx.save(); ctx.translate(10, 10); ctx.scale(SC * 0.85, SC * 0.85);
+    ctx.save(); ctx.translate(14, 18); ctx.scale(0.92, 0.92);
     drawForelimbs(ctx, p.forelimbs, 0); ctx.restore();
     // head
-    ctx.save(); ctx.translate(16, -18); ctx.scale(SC, SC);
+    ctx.save(); ctx.translate(24, -30);
     drawHead(ctx, p.head, 0, 0); ctx.restore();
     ctx.restore();
   });

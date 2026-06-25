@@ -11,11 +11,47 @@ import { addToRoster, isInRoster, removeFromRoster } from "./game/roster";
 import { clear, el } from "./render/dom";
 import { creatureCard } from "./render/creatureCard";
 import { playBattle } from "./render/arena";
+import type { Creature3DHandle } from "./render/creature3d";
 import { initAudio, setMuted, sfxLose, sfxWin, toggleMuted } from "./render/sound";
 
 let state: GameState = load();
 let cancelArena: (() => void) | null = null;
 let newGameExpanded = false;
+
+// Persistent 3D Lab preview. Created lazily once (a single WebGL context that we
+// reuse across re-renders via setGenome) so we never leak GL contexts. Falls back
+// silently to the 2D card if WebGL is unavailable or three fails to load.
+let creature3d: Creature3DHandle | null = null;
+let preview3dHost: HTMLElement | null = null;
+let creature3dFailed = false;
+
+function mount3dPreview(genome: Genome): HTMLElement | null {
+  if (creature3dFailed) return null;
+  if (!preview3dHost) {
+    preview3dHost = document.createElement("div");
+    preview3dHost.className = "creature3d-host";
+  }
+  if (!creature3d) {
+    // Lazy-import keeps three out of the initial bundle path until the Lab needs it.
+    import("./render/creature3d")
+      .then(({ mountCreature3D }) => {
+        if (!preview3dHost) return;
+        try {
+          creature3d = mountCreature3D(preview3dHost, genome, 240);
+        } catch {
+          creature3dFailed = true;
+          preview3dHost?.remove();
+          preview3dHost = null;
+        }
+      })
+      .catch(() => {
+        creature3dFailed = true;
+      });
+  } else {
+    creature3d.setGenome(genome);
+  }
+  return preview3dHost;
+}
 
 const SPEED_OPTS: { id: BattleSpeed; label: string; mult: number }[] = [
   { id: "slow", label: "🐢 Slow", mult: 0.4 },
@@ -227,9 +263,12 @@ function renderLab() {
 
   const creature = buildCreature(state.player);
   const alreadySaved = isInRoster(state.roster, state.player);
+  const host3d = mount3dPreview(state.player);
+  const heroChildren: HTMLElement[] = [el("h2", {}, ["Your Creature"])];
+  if (host3d) heroChildren.push(el("div", { class: "creature3d-stage" }, [host3d]));
+  heroChildren.push(creatureCard(creature));
   const preview = el("div", { class: "panel" }, [
-    el("h2", {}, ["Your Creature"]),
-    creatureCard(creature),
+    ...heroChildren,
     el("div", { class: "btnrow" }, [
       el("button", { class: "primary", onclick: startBattle }, ["⚔ Enter Arena"]),
       el(

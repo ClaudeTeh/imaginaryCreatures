@@ -203,6 +203,27 @@ button:disabled {
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
 }
 
+/* 3D WebGL hero preview (the DNA model) */
+.creature3d-stage {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+.creature3d-host {
+  width: 240px;
+  height: 240px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 42% 36%, #233259, #0b1020 72%);
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.45),
+    0 10px 28px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.creature3d-host canvas {
+  display: block;
+}
+
 /* Canvas creature preview in the card */
 .creature-preview-canvas {
   flex-shrink: 0;
