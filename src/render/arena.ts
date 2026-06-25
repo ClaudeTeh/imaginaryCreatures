@@ -154,7 +154,7 @@ export function playBattle(
     line: THREE.Line;
     life: number;
     maxLife: number;
-    kind: "lightning" | "tether";
+    kind: "lightning" | "tether" | "tether_1" | "tether_2";
     x1: number; y1: number; z1: number;
     x2: number; y2: number; z2: number;
   }
@@ -530,6 +530,18 @@ export function playBattle(
         p.mesh.position.add(p.velocity);
         if (p.mesh.geometry.type === "RingGeometry") {
           p.mesh.scale.addScalar(0.14);
+        } else if (p.mesh.geometry.type === "IcosahedronGeometry") {
+          p.mesh.scale.addScalar(0.015);
+        } else if (p.mesh.geometry.type === "BoxGeometry") {
+          p.velocity.y -= 0.005; // gravity for debris
+          p.mesh.rotation.x += 0.04;
+          p.mesh.rotation.y += 0.06;
+          if (p.mesh.position.y < 0.05 && p.velocity.y < 0) {
+            p.mesh.position.y = 0.05;
+            p.velocity.y = -p.velocity.y * 0.45; // bounce!
+            p.velocity.x *= 0.6;
+            p.velocity.z *= 0.6;
+          }
         } else {
           if ((p.mesh.material as THREE.MeshBasicMaterial).color.getHexString() === "b0b6c2") {
             p.mesh.scale.addScalar(0.06);
@@ -563,22 +575,46 @@ export function playBattle(
         const dx = b.x2 - b.x1;
         const dy = b.y2 - b.y1;
         const dz = b.z2 - b.z1;
-        const len = Math.hypot(dx, dy, dz) || 1;
-        const nx = -dy / len;
-        const ny = dx / len;
         
-        for (let j = 0; j <= segs; j++) {
-          const tt = j / segs;
-          const px = b.x1 + dx * tt;
-          const py = b.y1 + dy * tt;
-          const pz = b.z1 + dz * tt;
-          let off = 0;
-          if (b.kind === "lightning") {
-            off = (Math.random() - 0.5) * 0.5 * Math.sin(tt * Math.PI);
-          } else {
-            off = Math.sin(tt * Math.PI * 3 + frame * 0.4) * 0.2 * Math.sin(tt * Math.PI);
+        if (b.kind === "tether_1" || b.kind === "tether_2") {
+          const D = new THREE.Vector3(dx, dy, dz);
+          D.normalize();
+          const U = new THREE.Vector3(0, 1, 0).cross(D);
+          if (U.lengthSq() < 0.001) {
+            U.copy(new THREE.Vector3(1, 0, 0).cross(D));
           }
-          posAttr.setXYZ(j, px + nx * off, py + ny * off, pz);
+          U.normalize();
+          const V = new THREE.Vector3().crossVectors(D, U).normalize();
+          
+          for (let j = 0; j <= segs; j++) {
+            const tt = j / segs;
+            const coreX = b.x1 + dx * tt;
+            const coreY = b.y1 + dy * tt;
+            const coreZ = b.z1 + dz * tt;
+            const angle = tt * Math.PI * 5.5 + frame * 0.24 + (b.kind === "tether_2" ? Math.PI : 0);
+            const rad = 0.25 * Math.sin(tt * Math.PI);
+            const px = coreX + (U.x * Math.cos(angle) + V.x * Math.sin(angle)) * rad;
+            const py = coreY + (U.y * Math.cos(angle) + V.y * Math.sin(angle)) * rad;
+            const pz = coreZ + (U.z * Math.cos(angle) + V.z * Math.sin(angle)) * rad;
+            posAttr.setXYZ(j, px, py, pz);
+          }
+        } else {
+          const len = Math.hypot(dx, dy, dz) || 1;
+          const nx = -dy / len;
+          const ny = dx / len;
+          for (let j = 0; j <= segs; j++) {
+            const tt = j / segs;
+            const px = b.x1 + dx * tt;
+            const py = b.y1 + dy * tt;
+            const pz = b.z1 + dz * tt;
+            let off = 0;
+            if (b.kind === "lightning") {
+              off = (Math.random() - 0.5) * 0.5 * Math.sin(tt * Math.PI);
+            } else {
+              off = Math.sin(tt * Math.PI * 3 + frame * 0.4) * 0.2 * Math.sin(tt * Math.PI);
+            }
+            posAttr.setXYZ(j, px + nx * off, py + ny * off, pz);
+          }
         }
         posAttr.needsUpdate = true;
       }
@@ -625,6 +661,10 @@ export function playBattle(
         camShake = 1.8;
         spawnDustCloud3D(fighters3D.a.model.position, 18);
         spawnDustCloud3D(fighters3D.b.model.position, 18);
+        spawnGroundCrack3D(fighters3D.a.model.position, 1.2);
+        spawnGroundCrack3D(fighters3D.b.model.position, 1.2);
+        spawnDebris3D(fighters3D.a.model.position, 8);
+        spawnDebris3D(fighters3D.b.model.position, 8);
       }
 
       // Soundwave cries from mouths during roar
@@ -667,10 +707,32 @@ export function playBattle(
           const progress = f.actionTimer / f.actionDuration;
           f.lunge = -0.4 + 2.2 * progress;
           f.model.rotation.z = side === "a" ? 0.22 : -0.22;
+
+          // --- Genome-specific mid-strike VFX trails ---
+          const fvStrike = fView;
+          const isAvianStrike   = fvStrike.genome.forelimbs === "eagle" || fvStrike.genome.body === "eagle";
+          const isClawStrike    = ["crab", "scorpion", "eagle"].includes(fvStrike.genome.forelimbs);
+          const isGorillaStrike = fvStrike.genome.forelimbs === "gorilla";
+          const isSerpStrike    = ["cobra", "eel"].includes(fvStrike.genome.body);
+
+          if (isAvianStrike && Math.random() < 0.7) {
+            spawnSpeedLine3D(f.model.position, side);
+          }
+          if (isGorillaStrike && f.actionTimer === 1) {
+            spawnDustCloud3D(f.model.position, 18);
+          }
+          if (isSerpStrike && Math.random() < 0.4) {
+            spawnBurst3D(f.model.position.clone().add(new THREE.Vector3(0, 0.4, 0)), "#39ff14", 3, 0.07);
+          }
+
           if (f.actionTimer >= f.actionDuration) {
             if (f.onHitCallback) {
               f.onHitCallback();
               f.onHitCallback = undefined;
+            }
+            // Spawn claw slash on hit frame
+            if (isClawStrike) {
+              spawnClawSlash3D(f.model.position, side);
             }
             f.actionState = "recover";
             f.actionTimer = 0;
@@ -726,6 +788,18 @@ export function playBattle(
           .add(new THREE.Vector3(shakeX, shakeY, 0));
 
         const alive = fView.displayHp > 0.5;
+        
+        const isAvian = fView.genome.forelimbs === "eagle" || fView.genome.body === "eagle";
+        const isSerpentine = fView.genome.body === "cobra" || fView.genome.body === "eel";
+        const isHeavyMammal = ["bear", "rhino", "gorilla", "boar"].includes(fView.genome.body);
+        const isInsect = ["ant", "scorpion", "crab"].includes(fView.genome.body);
+
+        const isClawSwipe = fView.genome.forelimbs === "crab" || fView.genome.forelimbs === "scorpion";
+        const isAvianDive = fView.genome.forelimbs === "eagle";
+        const isTailWhip = ["scorpion", "cobra", "eel", "tiger"].includes(fView.genome.tail);
+        const isBiteSlam = ["boar", "wolf", "bear", "rhino", "cobra"].includes(fView.genome.head);
+        const isGorillaSlam = fView.genome.forelimbs === "gorilla";
+
         if (alive) {
           if (frame < introDuration) {
             // Drop-in animation from Y=8 to Y=0.1
@@ -733,7 +807,35 @@ export function playBattle(
             const dropY = 8.0 * (1.0 - progress * progress);
             currentPos.y += dropY + 0.1;
           } else {
-            currentPos.y += Math.sin(f.time * 2.5) * 0.08 + 0.1;
+            let hoverY = Math.sin(f.time * 2.5) * 0.08 + 0.1;
+            if (isAvian) {
+              hoverY = Math.sin(f.time * 2.2) * 0.15 + 0.35;
+            } else if (isSerpentine) {
+              hoverY = Math.sin(f.time * 1.8) * 0.03 + 0.1;
+            } else if (isHeavyMammal) {
+              hoverY = 0.05;
+            } else if (isInsect) {
+              hoverY = 0.02 + Math.sin(f.time * 4.5) * 0.01;
+            }
+            currentPos.y += hoverY;
+
+            // Combat height modifications based on strike type
+            if (f.actionState === "windup") {
+              const progress = f.actionTimer / f.actionDuration;
+              if (isAvianDive) {
+                currentPos.y += progress * 1.4;
+              } else if (isGorillaSlam) {
+                currentPos.y += progress * 0.8;
+              }
+            } else if (f.actionState === "strike") {
+              const progress = f.actionTimer / f.actionDuration;
+              if (isAvianDive) {
+                // Swoop curve
+                currentPos.y += 1.4 * (1.0 - progress) + Math.sin(progress * Math.PI) * 0.5;
+              } else if (isGorillaSlam) {
+                currentPos.y += 0.8 * (1.0 - progress);
+              }
+            }
           }
         } else {
           currentPos.y -= 1.0;
@@ -755,11 +857,92 @@ export function playBattle(
           (f.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.1, 0.55 - sHeight * 0.65);
         }
 
+        // Apply visual orientations based on combat strike state
+        const defaultRotY = side === "a" ? Math.PI / 2 - 0.4 : -Math.PI / 2 + 0.4;
+        if (alive) {
+          if (f.actionState === "strike" && isTailWhip) {
+            const progress = f.actionTimer / f.actionDuration;
+            f.model.rotation.y = defaultRotY + Math.sin(progress * Math.PI) * Math.PI * (side === "a" ? 2 : -2);
+          } else {
+            f.model.rotation.y += (defaultRotY - f.model.rotation.y) * 0.15;
+          }
+
+          if (f.actionState === "windup" && isGorillaSlam) {
+            f.model.rotation.z += ((side === "a" ? -0.25 : 0.25) - f.model.rotation.z) * 0.15;
+          } else if (f.actionState === "strike" && isAvianDive) {
+            const progress = f.actionTimer / f.actionDuration;
+            f.model.rotation.z = (side === "a" ? 0.35 : -0.35) * (1.0 - progress * 2.5);
+          } else if (f.actionState === "strike" && !isAvianDive) {
+            f.model.rotation.z = side === "a" ? 0.22 : -0.22;
+          } else if (f.actionState === "windup" && !isGorillaSlam) {
+            f.model.rotation.z = side === "a" ? -0.12 : 0.12;
+          } else {
+            f.model.rotation.z += (0 - f.model.rotation.z) * 0.15;
+          }
+        }
+
         // Animate individual sub-meshes inside the 3D model
         const bodyPart = f.model.getObjectByName("body");
-        if (bodyPart && alive) {
-          const breathe = Math.sin(f.time * 2.5) * 0.02;
-          bodyPart.scale.set(1.05 + breathe, 0.92 - breathe, 1.2 + breathe);
+        const neckPart = f.model.getObjectByName("neck");
+        const forelimbsPart = f.model.getObjectByName("forelimbs");
+        const hindlimbsPart = f.model.getObjectByName("hindlimbs");
+
+        if (alive) {
+          if (bodyPart) {
+            if (isAvian) {
+              const breathe = Math.sin(f.time * 3.0) * 0.015;
+              bodyPart.scale.set(1.04 + breathe, 0.94 - breathe, 1.18 + breathe);
+              bodyPart.rotation.x = 0.12 + Math.sin(f.time * 2.2) * 0.04;
+              bodyPart.rotation.y = 0;
+            } else if (isSerpentine) {
+              bodyPart.rotation.y = Math.sin(f.time * 2.2) * 0.12;
+              bodyPart.rotation.x = Math.cos(f.time * 1.8) * 0.05;
+              bodyPart.scale.set(1.05, 0.92, 1.2);
+            } else if (isHeavyMammal) {
+              const breathe = Math.sin(f.time * 1.2) * 0.035;
+              bodyPart.scale.set(1.1 + breathe, 0.88 - breathe, 1.25 + breathe);
+              bodyPart.rotation.x = 0;
+              bodyPart.rotation.y = Math.sin(f.time * 0.8) * 0.04;
+            } else if (isInsect) {
+              const breathe = Math.sin(f.time * 4.0) * 0.018;
+              bodyPart.scale.set(1.03 + breathe, 0.94 - breathe, 1.2 + breathe);
+              bodyPart.rotation.x = 0.02;
+              bodyPart.rotation.y = 0;
+            } else {
+              const breathe = Math.sin(f.time * 2.5) * 0.02;
+              bodyPart.scale.set(1.05 + breathe, 0.92 - breathe, 1.2 + breathe);
+              bodyPart.rotation.set(0, 0, 0);
+            }
+          }
+
+          if (neckPart && isSerpentine) {
+            neckPart.rotation.y = -Math.sin(f.time * 2.2) * 0.08;
+          }
+
+          if (forelimbsPart) {
+            forelimbsPart.rotation.set(0, 0, 0);
+            if (f.actionState === "strike" && isClawSwipe) {
+              const progress = f.actionTimer / f.actionDuration;
+              forelimbsPart.rotation.y = Math.sin(progress * Math.PI) * (side === "a" ? 0.9 : -0.9);
+              forelimbsPart.rotation.x = Math.sin(progress * Math.PI) * 0.4;
+            } else if (f.actionState === "strike" && isGorillaSlam) {
+              const progress = f.actionTimer / f.actionDuration;
+              forelimbsPart.rotation.x = -1.3 * progress;
+            } else if (isAvian) {
+              forelimbsPart.rotation.x = 0.25;
+            } else if (isInsect) {
+              forelimbsPart.rotation.z = Math.sin(f.time * 15.0) * 0.02;
+            }
+          }
+
+          if (hindlimbsPart) {
+            hindlimbsPart.rotation.set(0, 0, 0);
+            if (isAvian) {
+              hindlimbsPart.rotation.x = 0.4;
+            } else if (isInsect) {
+              hindlimbsPart.rotation.z = -Math.sin(f.time * 15.0) * 0.02;
+            }
+          }
         }
         
         // Active Head Tracking of opponent's head
@@ -769,7 +952,13 @@ export function playBattle(
             // Roar tilt: tilt head up and slightly outward
             headPart.rotation.x = -0.35;
             headPart.rotation.y = side === "a" ? 0.2 : -0.2;
+          } else if (f.actionState === "strike" && isBiteSlam) {
+            const progress = f.actionTimer / f.actionDuration;
+            headPart.position.z = Math.sin(progress * Math.PI) * 0.6;
+            headPart.rotation.set(0, 0, 0);
           } else {
+            headPart.position.z += (0 - headPart.position.z) * 0.15;
+            
             const worldPosHead = new THREE.Vector3();
             headPart.getWorldPosition(worldPosHead);
             const worldPosTarget = new THREE.Vector3();
@@ -780,10 +969,21 @@ export function playBattle(
             const angleY = Math.atan2(localTarget.x, localTarget.z);
             const angleX = -Math.atan2(localTarget.y, Math.hypot(localTarget.x, localTarget.z));
             
-            const clampedY = Math.max(-0.6, Math.min(0.6, angleY));
-            const clampedX = Math.max(-0.4, Math.min(0.4, angleX));
-            headPart.rotation.y += (clampedY - headPart.rotation.y) * 0.1;
-            headPart.rotation.x += (clampedX - headPart.rotation.x) * 0.1;
+            let targetRotY = Math.max(-0.6, Math.min(0.6, angleY));
+            let targetRotX = Math.max(-0.4, Math.min(0.4, angleX));
+            
+            if (isAvian) {
+              targetRotX -= 0.08;
+            } else if (isSerpentine) {
+              targetRotY += -Math.sin(f.time * 2.2) * 0.08;
+            } else if (isInsect) {
+              const twitch = (Math.sin(f.time * 12.0) + Math.cos(f.time * 19.0)) * 0.018;
+              targetRotY += twitch * 1.5;
+              targetRotX += twitch;
+            }
+            
+            headPart.rotation.y += (targetRotY - headPart.rotation.y) * 0.1;
+            headPart.rotation.x += (targetRotX - headPart.rotation.x) * 0.1;
           }
         }
 
@@ -818,7 +1018,7 @@ export function playBattle(
           if (frame > introDuration - 20 && frame < introDuration + 40) {
             mouthOpen = 0.35; // Roar!
           } else if (f.actionState === "windup" || f.actionState === "strike") {
-            mouthOpen = 0.25; // Attack!
+            mouthOpen = isBiteSlam ? 0.45 : 0.25; // Attack!
           } else {
             mouthOpen = Math.max(0, Math.sin(f.time * 1.8) * 0.06); // Breath
           }
@@ -846,21 +1046,23 @@ export function playBattle(
         }
 
         // Progressive sin-wave tail segments wag
+        const tailSwaySpeed = isSerpentine ? 4.5 : (isHeavyMammal ? 2.0 : 3.5);
+        const tailSwayAmp = isSerpentine ? 0.32 : (isHeavyMammal ? 0.08 : 0.15);
         for (let i = 0; i < 8; i++) {
           const seg = f.model.getObjectByName(`tail_seg_${i}`);
           if (seg) {
-            seg.rotation.y = Math.sin(f.time * 3.5 - i * 0.28) * 0.15;
+            seg.rotation.y = Math.sin(f.time * tailSwaySpeed - i * 0.32) * tailSwayAmp;
           }
         }
         const oldTail = f.model.getObjectByName("tail");
         if (oldTail && !f.model.getObjectByName("tail_seg_0") && alive) {
-          oldTail.rotation.y = Math.sin(f.time * 3.5) * 0.15;
+          oldTail.rotation.y = Math.sin(f.time * tailSwaySpeed) * tailSwayAmp;
         }
 
         const wingR = f.model.getObjectByName("wing_r");
         const wingL = f.model.getObjectByName("wing_l");
         if (wingR && wingL && alive) {
-          const flap = Math.sin(f.time * 6) * 0.3;
+          const flap = Math.sin(f.time * (isAvian ? 10 : 6)) * (isAvian ? 0.45 : 0.3);
           wingR.rotation.z = flap;
           wingL.rotation.z = -flap;
         }
@@ -976,6 +1178,51 @@ export function playBattle(
     raf = requestAnimationFrame(step);
   }
 
+  /** Three diagonal arc-lines forming a claw slash glyph at `pos`. */
+  const spawnClawSlash3D = (pos: THREE.Vector3, side: Side) => {
+    const dir = side === "a" ? 1 : -1;
+    const offsets: [number, number][] = [
+      [-0.18 * dir, 0.55],
+      [0, 0.40],
+      [0.18 * dir, 0.55],
+    ];
+    for (const [ox, oy] of offsets) {
+      const from = pos.clone().add(new THREE.Vector3(ox - 0.22 * dir, oy + 0.22, 0));
+      const to   = pos.clone().add(new THREE.Vector3(ox + 0.22 * dir, oy - 0.22, 0));
+      const geo  = new THREE.BufferGeometry().setFromPoints([from, to]);
+      const mat  = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+      const line = new THREE.Line(geo, mat);
+      scene3D?.add(line);
+      activeBeams3D.push({
+        line,
+        life: 14,
+        maxLife: 14,
+        kind: "lightning",
+        x1: from.x, y1: from.y, z1: from.z,
+        x2: to.x,   y2: to.y,   z2: to.z,
+      });
+    }
+  };
+
+  /** A single white-to-transparent speed streak trailing behind `pos` in `dir` direction. */
+  const spawnSpeedLine3D = (pos: THREE.Vector3, side: Side) => {
+    const dir = side === "a" ? -1 : 1;
+    const from = pos.clone().add(new THREE.Vector3(dir * 0.6 + (Math.random() - 0.5) * 0.25, (Math.random() - 0.5) * 0.5, 0));
+    const to   = pos.clone().add(new THREE.Vector3(dir * 1.8 + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.3, 0));
+    const geo  = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const mat  = new THREE.LineBasicMaterial({ color: 0xeeeeff, transparent: true, opacity: 0.75 });
+    const line = new THREE.Line(geo, mat);
+    scene3D?.add(line);
+    activeBeams3D.push({
+      line,
+      life: 9,
+      maxLife: 9,
+      kind: "lightning",
+      x1: from.x, y1: from.y, z1: from.z,
+      x2: to.x,   y2: to.y,   z2: to.z,
+    });
+  };
+
   const spawnBurst3D = (pos: THREE.Vector3, colorHex: string, count = 20, speed = 0.12) => {
     const geo = new THREE.SphereGeometry(0.06, 6, 6);
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex), transparent: true, opacity: 0.9 });
@@ -1048,6 +1295,133 @@ export function playBattle(
       life: 0.8,
       decay: 0.03,
     });
+  };
+
+  const spawnDebris3D = (pos: THREE.Vector3, count = 12) => {
+    const geo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x5a5345, roughness: 0.9 });
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(geo, mat.clone());
+      mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.1, (Math.random() - 0.5) * 0.6));
+      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      scene3D?.add(mesh);
+      activeParticles3D.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.16,
+          0.06 + Math.random() * 0.15,
+          (Math.random() - 0.5) * 0.16
+        ),
+        life: 1.0,
+        decay: 0.015 + Math.random() * 0.01,
+      });
+    }
+  };
+
+  const spawnGroundCrack3D = (pos: THREE.Vector3, maxRadius = 1.3) => {
+    const geo = new THREE.RingGeometry(maxRadius * 0.8, maxRadius, 24);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x070912,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.set(pos.x, 0.02, pos.z);
+    scene3D?.add(mesh);
+    activeParticles3D.push({
+      mesh,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 1.3,
+      decay: 0.012,
+    });
+  };
+
+  const spawnToxicBubbles3D = (pos: THREE.Vector3, count = 12) => {
+    const geo = new THREE.SphereGeometry(0.08, 6, 6);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.8 });
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(geo, mat.clone());
+      mesh.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.2, (Math.random() - 0.5) * 0.5));
+      scene3D?.add(mesh);
+      activeParticles3D.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.01,
+          0.015 + Math.random() * 0.02,
+          (Math.random() - 0.5) * 0.01
+        ),
+        life: 0.8,
+        decay: 0.014,
+      });
+    }
+  };
+
+  const spawnShield3D = (pos: THREE.Vector3, colorHex: string) => {
+    const geo = new THREE.IcosahedronGeometry(1.6, 1);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(colorHex),
+      wireframe: true,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos).add(new THREE.Vector3(0, 0.8, 0));
+    scene3D?.add(mesh);
+    activeParticles3D.push({
+      mesh,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 1.0,
+      decay: 0.03,
+    });
+  };
+
+  let healTexture: THREE.CanvasTexture | null = null;
+  const getHealTexture = (): THREE.CanvasTexture => {
+    if (!healTexture) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#36c08a";
+        ctx.fillRect(26, 10, 12, 44);
+        ctx.fillRect(10, 26, 44, 12);
+      }
+      healTexture = new THREE.CanvasTexture(canvas);
+    }
+    return healTexture;
+  };
+
+  const spawnHealCrosses3D = (pos: THREE.Vector3, count = 8) => {
+    const mat = new THREE.SpriteMaterial({
+      map: getHealTexture(),
+      transparent: true,
+      opacity: 0.95,
+    });
+    for (let i = 0; i < count; i++) {
+      const sprite = new THREE.Sprite(mat.clone());
+      sprite.position.copy(pos).add(new THREE.Vector3(
+        (Math.random() - 0.5) * 0.8,
+        0.3 + Math.random() * 0.5,
+        (Math.random() - 0.5) * 0.8
+      ));
+      sprite.scale.setScalar(0.4);
+      scene3D?.add(sprite);
+      activeFloats3D.push({
+        sprite,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.008,
+          0.025 + Math.random() * 0.015,
+          0
+        ),
+        life: 1.0,
+        decay: 0.018,
+      });
+    }
   };
 
   function drawSpeedLines(canvasOverlay: HTMLCanvasElement) {
@@ -1156,7 +1530,7 @@ export function playBattle(
     f.onHitCallback = onHit;
   }
 
-  const createBeam3D = (from: THREE.Vector3, to: THREE.Vector3, colorHex: string, kind: "lightning" | "tether") => {
+  const createBeam3D = (from: THREE.Vector3, to: THREE.Vector3, colorHex: string, kind: "lightning" | "tether" | "tether_1" | "tether_2") => {
     const points: THREE.Vector3[] = [];
     const segs = 10;
     for (let i = 0; i <= segs; i++) {
@@ -1168,10 +1542,11 @@ export function playBattle(
     });
     const line = new THREE.Line(geo, mat);
     scene3D?.add(line);
+    const isLightning = kind === "lightning";
     activeBeams3D.push({
       line,
-      life: kind === "lightning" ? 22 : 40,
-      maxLife: kind === "lightning" ? 22 : 40,
+      life: isLightning ? 22 : 40,
+      maxLife: isLightning ? 22 : 40,
       kind,
       x1: from.x, y1: from.y, z1: from.z,
       x2: to.x, y2: to.y, z2: to.z,
@@ -1234,6 +1609,7 @@ export function playBattle(
           camShake = Math.max(camShake, 0.8);
           spawnBurst3D(foe3D.model.position, "#39ff14", 15, 0.15);
           spawnImpactRing3D(foe3D.model.position, "#39ff14");
+          spawnToxicBubbles3D(foe3D.model.position, 12);
           spawnDustCloud3D(foe3D.model.position, 10);
           createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#39ff14", 26);
         }
@@ -1249,12 +1625,14 @@ export function playBattle(
       camShake = Math.max(camShake, 0.9);
       spawnBurst3D(foe3D.model.position, "#c39bff", 15, 0.16);
       spawnImpactRing3D(foe3D.model.position, "#c39bff");
+      spawnImpactRing3D(foe3D.model.position, "#ffd700"); // extra electric spark ring
       spawnDustCloud3D(foe3D.model.position, 10);
       createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#c39bff", 26);
     } else if (e.ability === "leech") {
       const startPos = atk3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
       const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
-      createBeam3D(endPos, startPos, "#ff3b30", "tether");
+      createBeam3D(endPos, startPos, "#ff3b30", "tether_1");
+      createBeam3D(endPos, startPos, "#ff3b30", "tether_2");
       fighters[other(e.by)].hitAnim = 0.9;
       foe3D.shake = 1.0;
       foe3D.flash = 1.0;
@@ -1273,15 +1651,27 @@ export function playBattle(
         camShake = Math.max(camShake, 1.2);
         spawnBurst3D(foe3D.model.position, "#ffae19", 18, 0.22);
         spawnImpactRing3D(foe3D.model.position, "#ffae19");
+        spawnGroundCrack3D(foe3D.model.position, 1.5);
+        spawnDebris3D(foe3D.model.position, 15);
         spawnDustCloud3D(foe3D.model.position, 12);
         createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ffae19", 26);
       });
     } else {
       atk3D.flash = 0.8;
       let col = "#7aa2ff";
-      if (e.ability === "venom") col = "#9be86c";
-      if (e.ability === "frenzy") col = "#ff6b81";
-      if (e.ability === "regenerate") col = "#6ce5b1";
+      if (e.ability === "venom") {
+        col = "#9be86c";
+        spawnToxicBubbles3D(atk3D.model.position, 12);
+      } else if (e.ability === "frenzy") {
+        col = "#ff6b81";
+        atk3D.flash = 1.3;
+      } else if (e.ability === "regenerate") {
+        col = "#6ce5b1";
+        spawnHealCrosses3D(atk3D.model.position, 10);
+      } else if (e.ability === "armor") {
+        col = "#7aa2ff";
+        spawnShield3D(atk3D.model.position, "#7aa2ff");
+      }
       spawnBurst3D(atk3D.model.position, col, 14, 0.14);
       spawnBuffAuraHelix3D(atk3D.model.position, col);
       createFloat3D(atk3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), abilityTag(e.ability), col, 24);
@@ -1305,6 +1695,10 @@ export function playBattle(
             camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
             spawnBurst3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 18 : 10, e.crit ? 0.2 : 0.12);
             spawnImpactRing3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b");
+            if (e.crit || fighters[e.by].genome.forelimbs === "gorilla") {
+              spawnGroundCrack3D(foe3D.model.position, e.crit ? 1.4 : 1.1);
+              spawnDebris3D(foe3D.model.position, e.crit ? 10 : 6);
+            }
             spawnDustCloud3D(foe3D.model.position, e.crit ? 12 : 6);
             sfxHit(e.crit);
             createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), e.crit ? `${e.dmg}!` : `${e.dmg}`, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 38 : 28);

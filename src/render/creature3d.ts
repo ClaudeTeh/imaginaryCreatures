@@ -191,6 +191,19 @@ function applyToonOutline(mesh: THREE.Mesh, width = 0.04) {
   mesh.add(outlineMesh);
 }
 
+let toonGradientMap: THREE.DataTexture | null = null;
+function getToonGradientMap(): THREE.DataTexture {
+  if (!toonGradientMap) {
+    const colors = new Uint8Array([0, 80, 160, 255]);
+    const tex = new THREE.DataTexture(colors, colors.length, 1, THREE.RedFormat);
+    tex.minFilter = THREE.NearestFilter;
+    tex.magFilter = THREE.NearestFilter;
+    tex.needsUpdate = true;
+    toonGradientMap = tex;
+  }
+  return toonGradientMap;
+}
+
 function mat(
   hex: string,
   opts: {
@@ -201,10 +214,9 @@ function mat(
     noTexture?: boolean;
   } = {}
 ) {
-  const params: THREE.MeshStandardMaterialParameters = {
+  const params: THREE.MeshToonMaterialParameters = {
     color: new THREE.Color(hex),
-    roughness: opts.rough ?? 0.55,
-    metalness: opts.metal ?? 0.15,
+    gradientMap: getToonGradientMap(),
     emissive: opts.emissive ? new THREE.Color(opts.emissive) : new THREE.Color(0x000000),
     emissiveIntensity: opts.emissiveI ?? 0,
   };
@@ -215,7 +227,7 @@ function mat(
     params.color = new THREE.Color(0xffffff);
   }
 
-  return new THREE.MeshStandardMaterial(params);
+  return new THREE.MeshToonMaterial(params);
 }
 
 function sphere(
@@ -1145,6 +1157,7 @@ export function mountCreature3D(
   const particleSystem = new THREE.Points(particlesGeo, particlesMat);
   scene.add(particleSystem);
 
+  let activeGenome = genome;
   let model = buildCreatureModel(genome);
   scene.add(model);
 
@@ -1238,20 +1251,99 @@ export function mountCreature3D(
     model.rotation.y = rotationOffset.y;
     model.rotation.x = rotationOffset.x;
     
-    // Breathing & idle motions
+    // Breathing & idle motions based on genome stances
     const body = model.getObjectByName("body");
-    if (body) {
-      const breathe = Math.sin(t * 2.5) * 0.02;
-      body.scale.set(1.05 + breathe, 0.92 - breathe, 1.2 + breathe);
-    }
-    
-    // Head Tracking
+    const neck = model.getObjectByName("neck");
     const head = model.getObjectByName("head");
+    const forelimbs = model.getObjectByName("forelimbs");
+    const hindlimbs = model.getObjectByName("hindlimbs");
+
+    const isAvian = activeGenome.forelimbs === "eagle" || activeGenome.body === "eagle";
+    const isSerpentine = activeGenome.body === "cobra" || activeGenome.body === "eel";
+    const isHeavyMammal = ["bear", "rhino", "gorilla", "boar"].includes(activeGenome.body);
+    const isInsect = ["ant", "scorpion", "crab"].includes(activeGenome.body);
+
+    // 1. Position hover and body tilt/scale
+    if (isAvian) {
+      // High-altitude hover flight
+      model.position.y = Math.sin(t * 2.2) * 0.15 + 0.35;
+      model.position.x = 0;
+      if (body) {
+        const breathe = Math.sin(t * 3.0) * 0.015;
+        body.scale.set(1.04 + breathe, 0.94 - breathe, 1.18 + breathe);
+        body.rotation.x = 0.12 + Math.sin(t * 2.2) * 0.04;
+        body.rotation.y = 0;
+      }
+      if (forelimbs) forelimbs.rotation.x = 0.25;
+      if (hindlimbs) hindlimbs.rotation.x = 0.4;
+    } else if (isSerpentine) {
+      // Slithering vertical/horizontal wave motion
+      model.position.y = Math.sin(t * 1.8) * 0.03 + 0.1;
+      model.position.x = 0;
+      if (body) {
+        body.rotation.y = Math.sin(t * 2.2) * 0.12;
+        body.rotation.x = Math.cos(t * 1.8) * 0.05;
+        body.scale.set(1.05, 0.92, 1.2);
+      }
+      if (neck) {
+        neck.rotation.y = -Math.sin(t * 2.2) * 0.08;
+      }
+    } else if (isHeavyMammal) {
+      // Grounded stance, deep heavy breathing, weight shifts
+      model.position.y = 0.05;
+      if (body) {
+        const breathe = Math.sin(t * 1.2) * 0.035;
+        body.scale.set(1.1 + breathe, 0.88 - breathe, 1.25 + breathe);
+        body.rotation.x = 0.0;
+        body.rotation.y = Math.sin(t * 0.8) * 0.04;
+      }
+      model.position.x = Math.sin(t * 0.8) * 0.05;
+    } else if (isInsect) {
+      // Low to ground, rapid micro jitters
+      model.position.y = 0.02 + Math.sin(t * 4.5) * 0.01;
+      model.position.x = 0;
+      if (body) {
+        const breathe = Math.sin(t * 4.0) * 0.018;
+        body.scale.set(1.03 + breathe, 0.94 - breathe, 1.2 + breathe);
+        body.rotation.x = 0.02;
+        body.rotation.y = 0.0;
+      }
+      const jitter = Math.sin(t * 15.0) * 0.02;
+      if (forelimbs) forelimbs.rotation.z = jitter;
+      if (hindlimbs) hindlimbs.rotation.z = -jitter;
+    } else {
+      // Standard Stance
+      model.position.y = Math.sin(t * 1.4) * 0.04 + 0.1;
+      model.position.x = 0;
+      if (body) {
+        const breathe = Math.sin(t * 2.5) * 0.02;
+        body.scale.set(1.05 + breathe, 0.92 - breathe, 1.2 + breathe);
+        body.rotation.set(0, 0, 0);
+      }
+    }
+
+    // 2. Head tracking with custom offsets based on stance
     if (head) {
       const targetHeadRotY = mouseNormalized.x * 0.6;
-      const targetHeadRotX = mouseNormalized.y * 0.4 + Math.sin(t * 1.2) * 0.03;
-      head.rotation.y += (targetHeadRotY - head.rotation.y) * 0.1;
-      head.rotation.x += (targetHeadRotX - head.rotation.x) * 0.1;
+      let targetHeadRotX = mouseNormalized.y * 0.4 + Math.sin(t * 1.2) * 0.03;
+      
+      if (isAvian) {
+        targetHeadRotX -= 0.08; // look down slightly when flying high
+      } else if (isSerpentine) {
+        // Head sways slightly in opposition to body slither
+        const swayOffset = -Math.sin(t * 2.2) * 0.08;
+        head.rotation.y += (targetHeadRotY + swayOffset - head.rotation.y) * 0.1;
+        head.rotation.x += (targetHeadRotX - head.rotation.x) * 0.1;
+      } else if (isInsect) {
+        const twitch = (Math.sin(t * 12.0) + Math.cos(t * 19.0)) * 0.018;
+        head.rotation.y += (targetHeadRotY + twitch * 1.5 - head.rotation.y) * 0.12;
+        head.rotation.x += (targetHeadRotX + twitch - head.rotation.x) * 0.12;
+      }
+
+      if (!isSerpentine && !isInsect) {
+        head.rotation.y += (targetHeadRotY - head.rotation.y) * 0.1;
+        head.rotation.x += (targetHeadRotX - head.rotation.x) * 0.1;
+      }
     }
 
     // Update rabbit ears physics (spring bounce)
@@ -1306,10 +1398,12 @@ export function mountCreature3D(
     }
 
     // Chain-link tail physics sway
+    const tailSwaySpeed = isSerpentine ? 4.5 : (isHeavyMammal ? 2.0 : 3.2);
+    const tailSwayAmp = isSerpentine ? 0.32 : (isHeavyMammal ? 0.08 : 0.15);
     for (let i = 0; i < 8; i++) {
       const seg = model.getObjectByName(`tail_seg_${i}`);
       if (seg) {
-        seg.rotation.y = Math.sin(t * 3.2 - i * 0.28) * 0.15;
+        seg.rotation.y = Math.sin(t * tailSwaySpeed - i * 0.32) * tailSwayAmp;
       }
     }
     // Backward compatibility check for unsegmented tail
@@ -1321,7 +1415,7 @@ export function mountCreature3D(
     const wingR = model.getObjectByName("wing_r");
     const wingL = model.getObjectByName("wing_l");
     if (wingR && wingL) {
-      const flap = Math.sin(t * 5) * 0.25;
+      const flap = Math.sin(t * (isAvian ? 10 : 5)) * (isAvian ? 0.45 : 0.25);
       wingR.rotation.z = flap;
       wingL.rotation.z = -flap;
     }
@@ -1342,9 +1436,6 @@ export function mountCreature3D(
       posAttr.setZ(i, z);
     }
     posAttr.needsUpdate = true;
-
-    // Gentle hover
-    model.position.y = Math.sin(t * 1.4) * 0.04 + 0.1;
 
     // Update soft shadow size and opacity based on height
     const shadow = scene.getObjectByName("shadow") as THREE.Mesh | undefined;
@@ -1372,6 +1463,7 @@ export function mountCreature3D(
 
   return {
     setGenome(next: Genome) {
+      activeGenome = next;
       scene.remove(model);
       disposeModel(model);
       model = buildCreatureModel(next);
