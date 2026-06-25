@@ -36,13 +36,41 @@ function cyl(rt: number, rb: number, h: number, c: string, opts = {}) {
   return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat(c, opts));
 }
 
+export function createSoftShadowMesh(): THREE.Mesh {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(0, 0, 0, 0.75)");
+    grad.addColorStop(0.5, "rgba(0, 0, 0, 0.35)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  const shadowMat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), shadowMat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = 0.19; // Just above pedestal ring
+  mesh.name = "shadow";
+  return mesh;
+}
+
 /** A pair of eyes parented to the head, looking forward (+Z). */
 function addEyes(head: THREE.Object3D, y: number, z: number, r = 0.09) {
   for (const s of [-1, 1] as const) {
     const white = sphere(r, "#ffffff", { rough: 0.2 });
+    white.name = `eye_${s === 1 ? "r" : "l"}`;
     white.position.set(s * 0.22, y, z);
     head.add(white);
     const pupil = sphere(r * 0.55, "#0a0a0a", { rough: 0.1 });
+    pupil.name = `pupil_${s === 1 ? "r" : "l"}`;
     pupil.position.set(s * 0.22, y, z + r * 0.7);
     head.add(pupil);
   }
@@ -413,24 +441,39 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     return g;
   }
 
-  // Segmented insect legs for ants & scorpions (hindlimbs)
+  // Segmented insect legs with capped joint spheres
   if (["ant", "scorpion"].includes(animalId)) {
     for (const s of [-1, 1] as const) {
       const legGroup = new THREE.Group();
       
+      const coxaJoint = sphere(0.13, c.shade, { rough: 0.3 });
+      coxaJoint.position.set(s * 0.52, -0.4, z);
+      legGroup.add(coxaJoint);
+
       const coxa = cyl(0.09, 0.09, 0.32, c.shade, { rough: 0.2 });
       coxa.position.set(s * 0.52, -0.4, z);
       coxa.rotation.z = s * 0.82;
+      coxa.castShadow = true;
       legGroup.add(coxa);
+
+      const femurJoint = sphere(0.11, c.fill, { rough: 0.3 });
+      femurJoint.position.set(s * 0.76, -0.72, z + 0.08);
+      legGroup.add(femurJoint);
 
       const femur = cyl(0.065, 0.065, 0.82, c.fill, { rough: 0.2 });
       femur.position.set(s * 0.76, -0.72, z + 0.08);
       femur.rotation.z = s * 0.42;
+      femur.castShadow = true;
       legGroup.add(femur);
+
+      const tibiaJoint = sphere(0.08, c.shade, { rough: 0.3 });
+      tibiaJoint.position.set(s * 0.92, -1.22, z + 0.16);
+      legGroup.add(tibiaJoint);
 
       const tibia = cyl(0.045, 0.032, 0.92, c.shade, { rough: 0.2 });
       tibia.position.set(s * 0.92, -1.22, z + 0.16);
       tibia.rotation.z = -s * 0.58;
+      tibia.castShadow = true;
       legGroup.add(tibia);
 
       g.add(legGroup);
@@ -438,18 +481,36 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     return g;
   }
 
-  // Hopping thighs for rabbit hindlimbs
+  // Hopping thighs connected via shin Bezier tubes
   if (!front && animalId === "rabbit") {
     for (const s of [-1, 1] as const) {
       const legGroup = new THREE.Group();
+      
       const thigh = sphere(0.36, c.fill, { rough: 0.78 });
       thigh.scale.set(0.9, 1.25, 0.9);
-      thigh.position.set(s * 0.56, -0.42, z);
+      thigh.position.set(s * 0.56, -0.22, z);
+      thigh.castShadow = true;
       legGroup.add(thigh);
+
+      // shin Bezier tube connecting thigh to foot
+      const start = new THREE.Vector3(s * 0.56, -0.42, z);
+      const mid = new THREE.Vector3(s * 0.76, -0.72, z - 0.15);
+      const end = new THREE.Vector3(s * 0.56, -0.92, z + 0.15);
+      
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+      const shinGeo = new THREE.TubeGeometry(curve, 10, 0.12, 8, false);
+      const shinMesh = new THREE.Mesh(shinGeo, mat(c.fill, { rough: 0.78 }));
+      shinMesh.castShadow = true;
+      legGroup.add(shinMesh);
+
+      const knee = sphere(0.14, c.fill, { rough: 0.78 });
+      knee.position.copy(mid);
+      legGroup.add(knee);
 
       const foot = sphere(0.18, c.shade, { rough: 0.78 });
       foot.scale.set(0.8, 0.38, 1.45);
-      foot.position.set(s * 0.56, -0.92, z + 0.22);
+      foot.position.copy(end);
+      foot.castShadow = true;
       legGroup.add(foot);
 
       g.add(legGroup);
@@ -457,145 +518,179 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     return g;
   }
 
-  // Gorilla muscular forelimbs
+  // Gorilla muscular forelimbs using curved Bezier tubes
   if (front && animalId === "gorilla") {
     for (const s of [-1, 1] as const) {
-      const leg = cyl(0.24, 0.32, 1.45, c.fill, { rough: 0.85 });
-      leg.position.set(s * 0.64, -0.64, z + 0.08);
-      leg.rotation.z = s * 0.14;
-      leg.castShadow = true;
-      g.add(leg);
+      const legGroup = new THREE.Group();
       
+      const shoulder = sphere(0.35, c.shade, { rough: 0.82 });
+      shoulder.position.set(s * 0.64, 0, z + 0.08);
+      legGroup.add(shoulder);
+
+      const start = new THREE.Vector3(s * 0.64, 0, z + 0.08);
+      const mid = new THREE.Vector3(s * 0.92, -0.65, z + 0.2);
+      const end = new THREE.Vector3(s * 0.68, -1.3, z + 0.24);
+
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+      const tubeGeo = new THREE.TubeGeometry(curve, 12, 0.25, 8, false);
+      const tubeMesh = new THREE.Mesh(tubeGeo, mat(c.fill, { rough: 0.8 }));
+      tubeMesh.castShadow = true;
+      legGroup.add(tubeMesh);
+
+      const elbow = sphere(0.24, c.fill, { rough: 0.8 });
+      elbow.position.copy(mid);
+      legGroup.add(elbow);
+
       const fist = sphere(0.38, c.shade, { rough: 0.82 });
-      fist.position.set(s * 0.64, -1.42, z + 0.24);
-      g.add(fist);
+      fist.position.copy(end);
+      fist.castShadow = true;
+      legGroup.add(fist);
+      
+      g.add(legGroup);
     }
     return g;
   }
 
-  // Default normal quad legs
+  // Default normal quad legs as Bezier tubes
   for (const s of [-1, 1] as const) {
-    const leg = cyl(0.14, 0.18, len, c.fill);
-    leg.position.set(s * 0.55, -0.55, z);
-    leg.castShadow = true;
-    g.add(leg);
+    const legGroup = new THREE.Group();
+    
+    const hip = sphere(0.22, c.shade, { rough: 0.6 });
+    hip.position.set(s * 0.55, 0, z);
+    legGroup.add(hip);
+
+    const startPoint = new THREE.Vector3(s * 0.55, 0, z);
+    const midPoint = new THREE.Vector3(s * 0.8, -len * 0.45, z + (front ? 0.15 : -0.15));
+    const endPoint = new THREE.Vector3(s * 0.55, -len * 0.9, z + (front ? 0.1 : 0.0));
+    
+    const curve = new THREE.QuadraticBezierCurve3(startPoint, midPoint, endPoint);
+    const tubeGeo = new THREE.TubeGeometry(curve, 12, 0.16, 8, false);
+    const tubeMesh = new THREE.Mesh(tubeGeo, mat(c.fill, { rough: 0.6 }));
+    tubeMesh.castShadow = true;
+    legGroup.add(tubeMesh);
+    
+    const knee = sphere(0.16, c.fill, { rough: 0.6 });
+    knee.position.copy(midPoint);
+    legGroup.add(knee);
+
     const foot = sphere(0.2, c.shade);
     foot.scale.set(1, 0.7, 1.3);
-    foot.position.set(s * 0.55, -0.55 - len / 2, z + 0.1);
-    g.add(foot);
+    foot.position.copy(endPoint);
+    foot.castShadow = true;
+    legGroup.add(foot);
+    
     // claws for predatory forelimbs
     if (front && ["bear", "tiger", "gorilla", "crab", "scorpion"].includes(animalId)) {
       for (const cl of [-1, 0, 1]) {
         const claw = cone(0.04, 0.18, c.accent, { rough: 0.3 });
-        claw.position.set(s * 0.55 + cl * 0.07, -0.55 - len / 2 - 0.05, z + 0.28);
+        claw.position.set(endPoint.x + cl * 0.07, endPoint.y - 0.05, endPoint.z + 0.28);
         claw.rotation.x = 1.2;
-        g.add(claw);
+        claw.castShadow = true;
+        legGroup.add(claw);
       }
     }
+    
+    g.add(legGroup);
   }
   return g;
 }
 
-/** TAIL — a tapered chain of spheres curving back, tinted by the donor. */
+/** TAIL — a hierarchical bone chain of segments parented to each other for tail physics. */
 function buildTail(animalId: string): THREE.Group {
-  const g = new THREE.Group();
+  const root = new THREE.Group();
+  root.name = "tail";
   const c = colorsFor(animalId);
 
-  // Scorpion tail arching over body
-  if (animalId === "scorpion") {
-    const segments = 8;
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const sz = 0.24 * (1 - t * 0.44);
-      const seg = sphere(sz, i % 2 === 0 ? c.fill : c.shade, { rough: 0.35, metal: 0.5 });
-      const angle = t * Math.PI * 1.12;
-      const ty = Math.sin(angle) * 1.45;
-      const tz = -Math.cos(angle) * 1.22 - 0.22;
-      seg.position.set(0, 0.25 + ty, tz);
-      seg.castShadow = true;
-      g.add(seg);
-      
-      if (i === segments - 1) {
-        const poisonBulb = sphere(0.18, c.accent, { rough: 0.22, metal: 0.65, emissive: c.accent, emissiveI: 0.55 });
-        poisonBulb.position.set(0, 0.25 + ty + 0.14, tz + 0.14);
-        g.add(poisonBulb);
-
-        const needle = cone(0.04, 0.24, "#0f0f0f", { rough: 0.1 });
-        needle.rotation.x = -1.25;
-        needle.position.set(0, 0.25 + ty + 0.24, tz + 0.24);
-        g.add(needle);
-      }
-    }
-    return g;
-  }
-
-  // Cobra snake tail
-  if (animalId === "cobra") {
-    const segments = 8;
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const seg = sphere(0.24 * (1 - t * 0.72), c.fill);
-      const angle = Math.sin(t * Math.PI * 1.5) * 0.32;
-      seg.position.set(angle, -t * 0.45, -0.8 - t * 1.35);
-      seg.castShadow = true;
-      g.add(seg);
-    }
-    return g;
-  }
-
-  // Eagle fan tail of feathers
+  // Eagle tail: fan of feathers (doesn't use a slithering chain)
   if (animalId === "eagle") {
-    const tailGroup = new THREE.Group();
     for (let i = -2; i <= 2; i++) {
       const f = sphere(0.14, c.fill, { rough: 0.8 });
       f.scale.set(0.6, 0.04, 1.42);
       f.position.set(i * 0.13, 0.08, -1.22);
       f.rotation.set(-0.24, i * 0.11, 0);
       f.castShadow = true;
-      tailGroup.add(f);
+      root.add(f);
     }
-    return tailGroup;
+    return root;
   }
 
-  // Tiger long striped tail
-  if (animalId === "tiger") {
-    const segments = 8;
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const seg = sphere(0.18 * (1 - t * 0.42), i % 2 === 0 ? c.fill : "#0d0d0d");
-      seg.position.set(0, 0.08 - Math.sin(t * 1.48) * 0.48, -0.85 - t * 1.38);
-      seg.castShadow = true;
-      g.add(seg);
-    }
-    return g;
-  }
-
-  // Fluffy rabbit tail puff
+  // Rabbit tail puff
   if (animalId === "rabbit") {
     const puff = sphere(0.24, c.accent, { rough: 0.85 });
     puff.position.set(0, 0.22, -0.92);
-    g.add(puff);
-    return g;
+    puff.castShadow = true;
+    root.add(puff);
+    return root;
   }
 
-  // Default tapered chain tail
-  const segs = 6;
-  for (let i = 0; i < segs; i++) {
-    const t = i / (segs - 1);
-    const seg = sphere(0.26 * (1 - t * 0.7), c.fill);
-    seg.position.set(0, 0.1 + t * 0.25, -0.9 - t * 1.1);
-    g.add(seg);
+  // Standard bone chain tail
+  let parent: THREE.Object3D = root;
+  const segments = animalId === "scorpion" ? 8 : (animalId === "cobra" ? 8 : (animalId === "tiger" ? 8 : 6));
+  
+  for (let i = 0; i < segments; i++) {
+    const t = i / (segments - 1);
+    const segGroup = new THREE.Group();
+    segGroup.name = `tail_seg_${i}`;
+    
+    if (i === 0) {
+      segGroup.position.set(0, 0.1, -0.9);
+    } else {
+      if (animalId === "scorpion") {
+        segGroup.position.set(0, 1.45 / segments, -1.22 / segments);
+      } else if (animalId === "cobra") {
+        segGroup.position.set(0, -0.45 / segments, -1.35 / segments);
+      } else if (animalId === "tiger") {
+        segGroup.position.set(0, -0.2 / segments, -1.38 / segments);
+      } else {
+        segGroup.position.set(0, 0.25 / segments, -1.1 / segments);
+      }
+    }
+    
+    let mesh: THREE.Mesh;
+    if (animalId === "scorpion") {
+      const sz = 0.24 * (1 - t * 0.44);
+      mesh = sphere(sz, i % 2 === 0 ? c.fill : c.shade, { rough: 0.35, metal: 0.5 });
+    } else if (animalId === "cobra") {
+      mesh = sphere(0.24 * (1 - t * 0.72), c.fill);
+    } else if (animalId === "tiger") {
+      mesh = sphere(0.18 * (1 - t * 0.42), i % 2 === 0 ? c.fill : "#0d0d0d");
+    } else {
+      mesh = sphere(0.26 * (1 - t * 0.7), c.fill);
+    }
+    mesh.castShadow = true;
+    segGroup.add(mesh);
+    
+    // Add end attachments to last segment
+    if (i === segments - 1) {
+      if (animalId === "scorpion") {
+        const poisonBulb = sphere(0.18, c.accent, { rough: 0.22, metal: 0.65, emissive: c.accent, emissiveI: 0.55 });
+        poisonBulb.position.set(0, 0.14, 0.14);
+        segGroup.add(poisonBulb);
+
+        const needle = cone(0.04, 0.24, "#0f0f0f", { rough: 0.1 });
+        needle.rotation.x = -1.25;
+        needle.position.set(0, 0.24, 0.24);
+        segGroup.add(needle);
+      } else if (animalId === "cobra") {
+        const tip = cone(0.12, 0.34, c.accent, { rough: 0.35 });
+        tip.rotation.x = -0.6;
+        tip.position.set(0, 0.2, -0.4);
+        segGroup.add(tip);
+      } else if (animalId === "eel" || animalId === "default") {
+        const fin = cone(0.25, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.5 });
+        fin.rotation.x = -1.4;
+        fin.position.set(0, 0.1, -0.4);
+        segGroup.add(fin);
+      }
+    }
+    
+    parent.add(segGroup);
+    parent = segGroup;
   }
-  // stinger / tuft on the end for some animals
-  if (["cobra"].includes(animalId)) {
-    const tip = cone(0.12, 0.34, c.accent, { rough: 0.35 });
-    tip.position.set(0, 0.55, -2.0); tip.rotation.x = -0.6; g.add(tip);
-  } else if (["eel"].includes(animalId)) {
-    const fin = cone(0.25, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.5 });
-    fin.position.set(0, 0.35, -2.1); fin.rotation.x = -1.4; g.add(fin);
-  }
-  return g;
+  
+  return root;
 }
+
 
 /** Assemble a full 3D creature model from a genome. Pure (no scene side-effects). */
 export function buildCreatureModel(genome: Genome): THREE.Group {
@@ -756,6 +851,10 @@ export function mountCreature3D(
   let model = buildCreatureModel(genome);
   scene.add(model);
 
+  // Soft shadow mesh beneath creature
+  const shadowMesh = createSoftShadowMesh();
+  scene.add(shadowMesh);
+
   // Drag controls
   let isDragging = false;
   let previousMousePosition = { x: 0, y: 0 };
@@ -805,16 +904,32 @@ export function mountCreature3D(
     previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
 
+  // Pointer head tracking
+  let mouseNormalized = { x: 0, y: 0 };
+  const onMouseMoveTracking = (e: MouseEvent) => {
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    mouseNormalized.x = (e.clientX - cx) / (rect.width * 2);
+    mouseNormalized.y = (e.clientY - cy) / (rect.height * 2);
+    mouseNormalized.x = Math.max(-1.0, Math.min(1.0, mouseNormalized.x));
+    mouseNormalized.y = Math.max(-1.0, Math.min(1.0, mouseNormalized.y));
+  };
+
   container.addEventListener("mousedown", onMouseDown);
   window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mouseup", onMouseUp);
   container.addEventListener("touchstart", onTouchStart);
   window.addEventListener("touchmove", onTouchMove);
   window.addEventListener("touchend", onMouseUp);
+  window.addEventListener("mousemove", onMouseMoveTracking);
 
   let raf = 0;
   let t = 0;
+  let blinkTimer = 0;
   let disposed = false;
+
   function frame() {
     if (disposed) return;
     t += 0.016;
@@ -833,14 +948,46 @@ export function mountCreature3D(
       body.scale.set(1.05 + breathe, 0.92 - breathe, 1.2 + breathe);
     }
     
+    // Head Tracking
     const head = model.getObjectByName("head");
     if (head) {
-      head.rotation.x = Math.sin(t * 1.2) * 0.05;
+      const targetHeadRotY = mouseNormalized.x * 0.6;
+      const targetHeadRotX = mouseNormalized.y * 0.4 + Math.sin(t * 1.2) * 0.03;
+      head.rotation.y += (targetHeadRotY - head.rotation.y) * 0.1;
+      head.rotation.x += (targetHeadRotX - head.rotation.x) * 0.1;
     }
 
-    const tail = model.getObjectByName("tail");
-    if (tail) {
-      tail.rotation.y = Math.sin(t * 3.2) * 0.15;
+    // Eye blinking
+    if (Math.random() < 0.008 && blinkTimer === 0) {
+      blinkTimer = 10;
+    }
+    let eyeScaleY = 1.0;
+    if (blinkTimer > 0) {
+      blinkTimer--;
+      if (blinkTimer > 5) {
+        eyeScaleY = 0.1 + (blinkTimer - 5) * 0.18;
+      } else {
+        eyeScaleY = 0.1 + (5 - blinkTimer) * 0.18;
+      }
+    }
+    for (const side of ["_r", "_l"]) {
+      const eye = model.getObjectByName(`eye${side}`);
+      const pupil = model.getObjectByName(`pupil${side}`);
+      if (eye) eye.scale.y = eyeScaleY;
+      if (pupil) pupil.scale.y = eyeScaleY;
+    }
+
+    // Chain-link tail physics sway
+    for (let i = 0; i < 8; i++) {
+      const seg = model.getObjectByName(`tail_seg_${i}`);
+      if (seg) {
+        seg.rotation.y = Math.sin(t * 3.2 - i * 0.28) * 0.15;
+      }
+    }
+    // Backward compatibility check for unsegmented tail
+    const oldTail = model.getObjectByName("tail");
+    if (oldTail && !model.getObjectByName("tail_seg_0")) {
+      oldTail.rotation.y = Math.sin(t * 3.2) * 0.15;
     }
 
     const wingR = model.getObjectByName("wing_r");
@@ -870,6 +1017,15 @@ export function mountCreature3D(
 
     // Gentle hover
     model.position.y = Math.sin(t * 1.4) * 0.04 + 0.1;
+
+    // Update soft shadow size and opacity based on height
+    const shadow = scene.getObjectByName("shadow") as THREE.Mesh | undefined;
+    if (shadow) {
+      const height = model.position.y;
+      const s = Math.max(0.2, 1.2 - height * 0.8);
+      shadow.scale.set(s, s, 1);
+      (shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.1, 0.55 - height * 0.65);
+    }
 
     renderer.render(scene, camera);
     raf = requestAnimationFrame(frame);
@@ -904,12 +1060,16 @@ export function mountCreature3D(
       particlesGeo.dispose();
       particlesMat.dispose();
       
+      shadowMesh.geometry.dispose();
+      (shadowMesh.material as THREE.Material).dispose();
+      
       container.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
       container.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onMouseUp);
+      window.removeEventListener("mousemove", onMouseMoveTracking);
       
       renderer.dispose();
       renderer.domElement.remove();

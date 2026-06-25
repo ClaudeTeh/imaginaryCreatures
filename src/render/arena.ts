@@ -2,7 +2,7 @@ import type { BattleEvent, BattleResult, Side } from "../combat/combat";
 import { sfxAbility, sfxHeal, sfxHit } from "./sound";
 import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
 import * as THREE from "three";
-import { buildCreatureModel } from "./creature3d";
+import { buildCreatureModel, createSoftShadowMesh } from "./creature3d";
 import type { Genome } from "../core/types";
 
 interface Particle {
@@ -111,13 +111,26 @@ export function playBattle(
   let ringGeo: THREE.TorusGeometry | null = null;
   let ringMat: THREE.MeshStandardMaterial | null = null;
 
+  let ambientLight: THREE.AmbientLight | null = null;
+  let keyLight: THREE.DirectionalLight | null = null;
+  let rimLight: THREE.DirectionalLight | null = null;
+  let spotlight: THREE.SpotLight | null = null;
+
   interface Fighter3D {
     model: THREE.Group;
+    shadow: THREE.Mesh;
     basePos: THREE.Vector3;
     shake: number;
     lunge: number;
+    dodgeOffset: number;
     flash: number;
     time: number;
+    actionState: "idle" | "windup" | "strike" | "recover" | "dodge";
+    actionTimer: number;
+    actionDuration: number;
+    dodgeDir: number;
+    blinkTimer: number;
+    onHitCallback?: () => void;
   }
 
   interface Particle3D {
@@ -186,6 +199,18 @@ export function playBattle(
   let frame = 0;
   let finished = false;
 
+  interface CinematicState {
+    active: boolean;
+    casterSide: Side;
+    timer: number;
+    duration: number;
+    ability: string;
+    value: number;
+    targetHp?: number;
+    onComplete?: () => void;
+  }
+  let cinematic: CinematicState = { active: false, casterSide: "a", timer: 0, duration: 0, ability: "", value: 0 };
+
   const introDuration = 60; // frames for camera fly-in
 
   try {
@@ -205,17 +230,24 @@ export function playBattle(
     camera3D.position.set(0, 14, 22); // Start back for intro fly-in
     camera3D.lookAt(0, 1.2, 0);
 
-    scene3D.add(new THREE.AmbientLight(0x445588, 0.9));
-    const dirLight = new THREE.DirectionalLight(0xffedd5, 1.5);
-    dirLight.position.set(-6, 12, 8);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    scene3D.add(dirLight);
+    ambientLight = new THREE.AmbientLight(0x445588, 0.9);
+    scene3D.add(ambientLight);
 
-    const rimLight = new THREE.DirectionalLight(0x9b6cff, 0.8);
+    keyLight = new THREE.DirectionalLight(0xffedd5, 1.5);
+    keyLight.position.set(-6, 12, 8);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    scene3D.add(keyLight);
+
+    rimLight = new THREE.DirectionalLight(0x9b6cff, 0.8);
     rimLight.position.set(6, 4, -6);
     scene3D.add(rimLight);
+
+    spotlight = new THREE.SpotLight(0xffffff, 0, 18, Math.PI / 4, 0.5, 1);
+    spotlight.position.set(0, 10, 0);
+    spotlight.castShadow = true;
+    scene3D.add(spotlight);
 
     // Arena Floor
     arenaGroup = new THREE.Group();
@@ -239,22 +271,41 @@ export function playBattle(
     scene3D.add(arenaGroup);
 
     // Build 3D models from genomes
+    const shadowA = createSoftShadowMesh();
+    const shadowB = createSoftShadowMesh();
+    scene3D.add(shadowA);
+    scene3D.add(shadowB);
+
     fighters3D = {
       a: {
         model: buildCreatureModel(sa.genome as unknown as Genome),
+        shadow: shadowA,
         basePos: new THREE.Vector3(-4, 0, 0.5),
         shake: 0,
         lunge: 0,
+        dodgeOffset: 0,
         flash: 0,
         time: 0,
+        actionState: "idle",
+        actionTimer: 0,
+        actionDuration: 0,
+        dodgeDir: 0,
+        blinkTimer: 0,
       },
       b: {
         model: buildCreatureModel(sb.genome as unknown as Genome),
+        shadow: shadowB,
         basePos: new THREE.Vector3(4, 0, -0.5),
         shake: 0,
         lunge: 0,
+        dodgeOffset: 0,
         flash: 0,
         time: Math.PI,
+        actionState: "idle",
+        actionTimer: 0,
+        actionDuration: 0,
+        dodgeDir: 0,
+        blinkTimer: 0,
       },
     };
 
@@ -313,11 +364,15 @@ export function playBattle(
 
   function step() {
     frame++;
-    currentTick += ticksPerFrame;
 
-    while (cursor < ordered.length && ordered[cursor].t <= currentTick) {
-      applyEvent(ordered[cursor]);
-      cursor++;
+    if (use3D && cinematic.active) {
+      // Pause simulation progress during cinematic animations, but let frame advance
+    } else {
+      currentTick += ticksPerFrame;
+      while (cursor < ordered.length && ordered[cursor].t <= currentTick) {
+        applyEvent(ordered[cursor]);
+        cursor++;
+      }
     }
 
     if (use3D && fighters3D && renderer3D && scene3D && camera3D) {
@@ -328,22 +383,74 @@ export function playBattle(
         fighters[side].displayHp += (fighters[side].targetHp - fighters[side].displayHp) * 0.25;
       }
 
-      // Camera Intro & Hit Shakes
+      // Camera Intro & Cinematic state updates
       if (frame < introDuration) {
         const tIntro = frame / introDuration;
-        const ease = tIntro * (2 - tIntro); // quad ease-out
+        const ease = tIntro * (2 - tIntro);
         camera3D.position.set(0, 14 - ease * 6.5, 22 - ease * 7.5);
         camera3D.lookAt(0, 1.2, 0);
+      } else if (cinematic.active) {
+        cinematic.timer++;
+        const progress = cinematic.timer / cinematic.duration;
+        const caster = fighters3D[cinematic.casterSide];
+        
+        // 1. Camera Zoom close-up on caster
+        const targetCamPos = caster.basePos.clone().add(new THREE.Vector3(cinematic.casterSide === "a" ? 2.5 : -2.5, 2.2, 5.0));
+        const targetLookAt = caster.basePos.clone().add(new THREE.Vector3(0, 1.4, 0));
+        
+        camera3D.position.lerp(targetCamPos, 0.12);
+        camera3D.lookAt(new THREE.Vector3(0, 1.2, 0).lerp(targetLookAt, 0.5));
+        
+        // 2. Dim background, raise caster spotlight
+        spotlight!.target = caster.model;
+        ambientLight!.intensity = 0.9 * (1.0 - Math.sin(progress * Math.PI) * 0.85);
+        keyLight!.intensity = 1.5 * (1.0 - Math.sin(progress * Math.PI) * 0.9);
+        rimLight!.intensity = 0.8 * (1.0 - Math.sin(progress * Math.PI) * 0.8);
+        spotlight!.intensity = Math.sin(progress * Math.PI) * 4.5;
+
+        // Swirl charge particles on caster
+        if (cinematic.timer % 3 === 0 && progress < 0.8) {
+          const col = cinematic.ability === "spit" ? "#39ff14" : (cinematic.ability === "shock" ? "#c39bff" : (cinematic.ability === "leech" ? "#ff3b30" : "#ffae19"));
+          spawnSwirlParticle3D(caster.model.position, col);
+        }
+
+        if (cinematic.timer >= cinematic.duration) {
+          cinematic.active = false;
+          if (cinematic.onComplete) {
+            cinematic.onComplete();
+          }
+          spotlight!.intensity = 0;
+        }
       } else {
+        // Dynamic Combat Camera: pan slightly based on active lunges
+        const targetCamPos = new THREE.Vector3(0, 7.5, 14.5);
+        const targetLookAt = new THREE.Vector3(0, 1.2, 0);
+
+        const actA = fighters3D.a.actionState;
+        const actB = fighters3D.b.actionState;
+
+        if (actA === "windup" || actA === "strike") {
+          targetCamPos.add(new THREE.Vector3(0.8, -0.4, -0.6));
+          targetLookAt.add(new THREE.Vector3(0.5, 0, 0));
+        } else if (actB === "windup" || actB === "strike") {
+          targetCamPos.add(new THREE.Vector3(-0.8, -0.4, -0.6));
+          targetLookAt.add(new THREE.Vector3(-0.5, 0, 0));
+        }
+
+        camera3D.position.lerp(targetCamPos, 0.08);
+        camera3D.lookAt(targetLookAt);
+
+        // Restore lighting
+        ambientLight!.intensity += (0.9 - ambientLight!.intensity) * 0.1;
+        keyLight!.intensity += (1.5 - keyLight!.intensity) * 0.1;
+        rimLight!.intensity += (0.8 - rimLight!.intensity) * 0.1;
+        spotlight!.intensity += (0 - spotlight!.intensity) * 0.1;
+
         if (camShake > 0.01) {
           camShake *= 0.85;
           const sx = (Math.random() - 0.5) * camShake;
           const sy = (Math.random() - 0.5) * camShake * 0.5;
-          camera3D.position.set(sx, 7.5 + sy, 14.5);
-          camera3D.lookAt(0, 1.2, 0);
-        } else {
-          camera3D.position.set(0, 7.5, 14.5);
-          camera3D.lookAt(0, 1.2, 0);
+          camera3D.position.add(new THREE.Vector3(sx, sy, 0));
         }
       }
 
@@ -359,7 +466,6 @@ export function playBattle(
           activeProjectiles3D.splice(i, 1);
         } else {
           const current = new THREE.Vector3().lerpVectors(pr.start, pr.end, pr.progress);
-          // quadratic arc trajectory
           current.y += Math.sin(pr.progress * Math.PI) * 1.5;
           pr.mesh.position.copy(current);
           
@@ -382,9 +488,13 @@ export function playBattle(
       for (let i = activeParticles3D.length - 1; i >= 0; i--) {
         const p = activeParticles3D[i];
         p.mesh.position.add(p.velocity);
-        p.velocity.y -= 0.003; // gravity
+        if (p.mesh.geometry.type === "RingGeometry") {
+          p.mesh.scale.addScalar(0.14);
+        } else {
+          p.velocity.y -= 0.003; // gravity
+        }
         p.life -= p.decay;
-        (p.mesh.material as THREE.MeshBasicMaterial).opacity = p.life;
+        (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, p.life);
         if (p.life <= 0) {
           scene3D.remove(p.mesh);
           p.mesh.geometry.dispose();
@@ -467,6 +577,66 @@ export function playBattle(
 
         f.time += 0.016;
 
+        // Action State machine transitions
+        if (f.actionState === "windup") {
+          f.actionTimer++;
+          f.lunge = -0.4 * (f.actionTimer / f.actionDuration);
+          f.model.rotation.z = side === "a" ? -0.12 : 0.12;
+          if (f.actionTimer >= f.actionDuration) {
+            f.actionState = "strike";
+            f.actionTimer = 0;
+            f.actionDuration = 5;
+          }
+        } else if (f.actionState === "strike") {
+          f.actionTimer++;
+          const progress = f.actionTimer / f.actionDuration;
+          f.lunge = -0.4 + 2.2 * progress;
+          f.model.rotation.z = side === "a" ? 0.22 : -0.22;
+          if (f.actionTimer >= f.actionDuration) {
+            if (f.onHitCallback) {
+              f.onHitCallback();
+              f.onHitCallback = undefined;
+            }
+            f.actionState = "recover";
+            f.actionTimer = 0;
+            f.actionDuration = 18;
+          }
+        } else if (f.actionState === "recover") {
+          f.actionTimer++;
+          const progress = f.actionTimer / f.actionDuration;
+          f.lunge = 1.8 * (1 - progress * (2 - progress));
+          f.model.rotation.z = 0;
+          if (f.actionTimer >= f.actionDuration) {
+            f.actionState = "idle";
+            f.lunge = 0;
+          }
+        } else if (f.actionState === "dodge") {
+          f.actionTimer++;
+          const half = f.actionDuration / 2;
+          if (f.actionTimer < half) {
+            f.dodgeOffset = f.dodgeDir * 1.5 * (f.actionTimer / half);
+          } else {
+            f.dodgeOffset = f.dodgeDir * 1.5 * (1 - (f.actionTimer - half) / half);
+          }
+          if (f.actionTimer >= f.actionDuration) {
+            f.actionState = "idle";
+            f.dodgeOffset = 0;
+          }
+        } else {
+          f.lunge = 0;
+          f.dodgeOffset = 0;
+          // Random idle side-steps/dodges
+          if (Math.random() < 0.003 && fView.displayHp > 0.5) {
+            f.actionState = "dodge";
+            f.actionTimer = 0;
+            f.actionDuration = 24;
+            f.dodgeDir = Math.random() < 0.5 ? 1 : -1;
+          }
+        }
+
+        const dirVec = targetF.basePos.clone().sub(f.basePos).normalize();
+        const perpVec = new THREE.Vector3(-dirVec.z, 0, dirVec.x).normalize();
+
         let shakeX = 0;
         let shakeY = 0;
         if (f.shake > 0.01) {
@@ -475,15 +645,9 @@ export function playBattle(
           shakeY = (Math.random() - 0.5) * f.shake * 0.4;
         }
 
-        if (f.lunge > 0.01) {
-          f.lunge *= 0.93;
-        } else {
-          f.lunge = 0;
-        }
-
-        const dirVec = targetF.basePos.clone().sub(f.basePos).normalize();
         const currentPos = f.basePos.clone()
-          .add(dirVec.multiplyScalar(f.lunge * 1.8))
+          .add(dirVec.multiplyScalar(f.lunge))
+          .add(perpVec.multiplyScalar(f.dodgeOffset))
           .add(new THREE.Vector3(shakeX, shakeY, 0));
 
         const alive = fView.displayHp > 0.5;
@@ -499,16 +663,73 @@ export function playBattle(
 
         f.model.position.copy(currentPos);
 
+        // Update soft shadow plane
+        if (f.shadow) {
+          f.shadow.position.set(currentPos.x, 0.19, currentPos.z);
+          const sHeight = currentPos.y;
+          const sScale = Math.max(0.2, 1.2 - sHeight * 0.8);
+          f.shadow.scale.set(sScale, sScale, 1);
+          (f.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.1, 0.55 - sHeight * 0.65);
+        }
+
         // Animate individual sub-meshes inside the 3D model
         const bodyPart = f.model.getObjectByName("body");
         if (bodyPart && alive) {
           const breathe = Math.sin(f.time * 2.5) * 0.02;
           bodyPart.scale.set(1.05 + breathe, 0.92 - breathe, 1.2 + breathe);
         }
-        const tailPart = f.model.getObjectByName("tail");
-        if (tailPart && alive) {
-          tailPart.rotation.y = Math.sin(f.time * 3.5) * 0.15;
+        
+        // Active Head Tracking of opponent's head
+        const headPart = f.model.getObjectByName("head");
+        if (headPart && alive && targetF) {
+          const worldPosHead = new THREE.Vector3();
+          headPart.getWorldPosition(worldPosHead);
+          const worldPosTarget = new THREE.Vector3();
+          targetF.model.getWorldPosition(worldPosTarget);
+          worldPosTarget.y += 1.6;
+          
+          const localTarget = headPart.parent!.worldToLocal(worldPosTarget.clone());
+          const angleY = Math.atan2(localTarget.x, localTarget.z);
+          const angleX = -Math.atan2(localTarget.y, Math.hypot(localTarget.x, localTarget.z));
+          
+          const clampedY = Math.max(-0.6, Math.min(0.6, angleY));
+          const clampedX = Math.max(-0.4, Math.min(0.4, angleX));
+          headPart.rotation.y += (clampedY - headPart.rotation.y) * 0.1;
+          headPart.rotation.x += (clampedX - headPart.rotation.x) * 0.1;
         }
+
+        // Eye blinking
+        if (Math.random() < 0.008 && f.blinkTimer === 0) {
+          f.blinkTimer = 10;
+        }
+        let eyeScaleY = 1.0;
+        if (f.blinkTimer > 0) {
+          f.blinkTimer--;
+          if (f.blinkTimer > 5) {
+            eyeScaleY = 0.1 + (f.blinkTimer - 5) * 0.18;
+          } else {
+            eyeScaleY = 0.1 + (5 - f.blinkTimer) * 0.18;
+          }
+        }
+        for (const sideSuffix of ["_r", "_l"]) {
+          const eye = f.model.getObjectByName(`eye${sideSuffix}`);
+          const pupil = f.model.getObjectByName(`pupil${sideSuffix}`);
+          if (eye) eye.scale.y = eyeScaleY;
+          if (pupil) pupil.scale.y = eyeScaleY;
+        }
+
+        // Progressive sin-wave tail segments wag
+        for (let i = 0; i < 8; i++) {
+          const seg = f.model.getObjectByName(`tail_seg_${i}`);
+          if (seg) {
+            seg.rotation.y = Math.sin(f.time * 3.5 - i * 0.28) * 0.15;
+          }
+        }
+        const oldTail = f.model.getObjectByName("tail");
+        if (oldTail && !f.model.getObjectByName("tail_seg_0") && alive) {
+          oldTail.rotation.y = Math.sin(f.time * 3.5) * 0.15;
+        }
+
         const wingR = f.model.getObjectByName("wing_r");
         const wingL = f.model.getObjectByName("wing_l");
         if (wingR && wingL && alive) {
@@ -648,6 +869,83 @@ export function playBattle(
     }
   };
 
+  const spawnSwirlParticle3D = (center: THREE.Vector3, colorHex: string) => {
+    const geo = new THREE.SphereGeometry(0.05, 4, 4);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex), transparent: true, opacity: 0.9 });
+    const mesh = new THREE.Mesh(geo, mat);
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 1.8;
+    mesh.position.set(
+      center.x + Math.cos(angle) * radius,
+      center.y + (Math.random() - 0.2) * 0.5,
+      center.z + Math.sin(angle) * radius
+    );
+    scene3D?.add(mesh);
+    const tangent = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle)).normalize();
+    const radial = center.clone().sub(mesh.position).normalize();
+    const vel = radial.multiplyScalar(0.04).add(tangent.multiplyScalar(0.03)).add(new THREE.Vector3(0, 0.03, 0));
+    activeParticles3D.push({
+      mesh,
+      velocity: vel,
+      life: 0.8,
+      decay: 0.02,
+    });
+  };
+
+  const spawnImpactRing3D = (pos: THREE.Vector3, colorHex: string) => {
+    const geo = new THREE.RingGeometry(0.1, 0.15, 32);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(colorHex),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos).add(new THREE.Vector3(0, 1.0, 0.5));
+    if (camera3D) {
+      mesh.lookAt(camera3D.position);
+    }
+    scene3D?.add(mesh);
+    activeParticles3D.push({
+      mesh,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 0.7,
+      decay: 0.045,
+    });
+  };
+
+  const spawnBuffAuraHelix3D = (pos: THREE.Vector3, colorHex: string) => {
+    const geo = new THREE.SphereGeometry(0.06, 4, 4);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex), transparent: true, opacity: 0.8 });
+    for (let i = 0; i < 16; i++) {
+      const mesh = new THREE.Mesh(geo, mat.clone());
+      const angle = (i / 16) * Math.PI * 4;
+      const height = (i / 16) * 2.0;
+      mesh.position.set(
+        pos.x + Math.cos(angle) * 0.7,
+        pos.y + height,
+        pos.z + Math.sin(angle) * 0.7
+      );
+      scene3D?.add(mesh);
+      activeParticles3D.push({
+        mesh,
+        velocity: new THREE.Vector3(0, 0.02 + Math.random() * 0.015, 0),
+        life: 1.0,
+        decay: 0.02 + Math.random() * 0.01,
+      });
+    }
+  };
+
+  function triggerLungeStrike(side: Side, multiplier = 1.0, onHit: () => void) {
+    const f = fighters3D![side];
+    f.actionState = "windup";
+    f.actionTimer = 0;
+    f.actionDuration = Math.round(10 * multiplier);
+    f.lunge = 0;
+    f.onHitCallback = onHit;
+  }
+
   const createBeam3D = (from: THREE.Vector3, to: THREE.Vector3, colorHex: string, kind: "lightning" | "tether") => {
     const points: THREE.Vector3[] = [];
     const segs = 10;
@@ -697,97 +995,124 @@ export function playBattle(
     });
   };
 
+  function executeAbilityVFX(e: Extract<BattleEvent, { kind: "ability" }>) {
+    const foe = fighters[other(e.by)];
+    const atk3D = fighters3D![e.by];
+    const foe3D = fighters3D![other(e.by)];
+    sfxAbility();
+    
+    if (e.ability === "spit") {
+      const startPos = atk3D.model.position.clone().add(new THREE.Vector3(e.by === "a" ? 0.8 : -0.8, 1.2, 0));
+      const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+      const projGeo = new THREE.SphereGeometry(0.18, 8, 8);
+      const projMat = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
+      const projMesh = new THREE.Mesh(projGeo, projMat);
+      projMesh.position.copy(startPos);
+      scene3D?.add(projMesh);
+      activeProjectiles3D.push({
+        mesh: projMesh,
+        start: startPos,
+        end: endPos,
+        progress: 0,
+        speed: 0.018,
+        colorHex: "#39ff14",
+        onHit: () => {
+          fighters[other(e.by)].hitAnim = 0.9;
+          foe3D.shake = 1.0;
+          foe3D.flash = 1.0;
+          foe.targetHp = e.targetHp;
+          camShake = Math.max(camShake, 0.8);
+          spawnBurst3D(foe3D.model.position, "#39ff14", 15, 0.15);
+          spawnImpactRing3D(foe3D.model.position, "#39ff14");
+          createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#39ff14", 26);
+        }
+      });
+    } else if (e.ability === "shock") {
+      const startPos = atk3D.model.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+      const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+      createBeam3D(startPos, endPos, "#c39bff", "lightning");
+      fighters[other(e.by)].hitAnim = 0.9;
+      foe3D.shake = 1.2;
+      foe3D.flash = 1.0;
+      foe.targetHp = e.targetHp;
+      camShake = Math.max(camShake, 0.9);
+      spawnBurst3D(foe3D.model.position, "#c39bff", 15, 0.16);
+      spawnImpactRing3D(foe3D.model.position, "#c39bff");
+      createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#c39bff", 26);
+    } else if (e.ability === "leech") {
+      const startPos = atk3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+      const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+      createBeam3D(endPos, startPos, "#ff3b30", "tether");
+      fighters[other(e.by)].hitAnim = 0.9;
+      foe3D.shake = 1.0;
+      foe3D.flash = 1.0;
+      foe.targetHp = e.targetHp;
+      camShake = Math.max(camShake, 0.7);
+      spawnBurst3D(foe3D.model.position, "#ff3b30", 12, 0.12);
+      spawnImpactRing3D(foe3D.model.position, "#ff3b30");
+      createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ff3b30", 26);
+    } else if (e.ability === "charge") {
+      triggerLungeStrike(e.by, 1.8, () => {
+        fighters[other(e.by)].hitAnim = 1.0;
+        foe3D.shake = 1.4;
+        foe3D.flash = 1.0;
+        foe.targetHp = e.targetHp;
+        camShake = Math.max(camShake, 1.2);
+        spawnBurst3D(foe3D.model.position, "#ffae19", 18, 0.22);
+        spawnImpactRing3D(foe3D.model.position, "#ffae19");
+        createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ffae19", 26);
+      });
+    } else {
+      atk3D.flash = 0.8;
+      let col = "#7aa2ff";
+      if (e.ability === "venom") col = "#9be86c";
+      if (e.ability === "frenzy") col = "#ff6b81";
+      if (e.ability === "regenerate") col = "#6ce5b1";
+      spawnBurst3D(atk3D.model.position, col, 14, 0.14);
+      spawnBuffAuraHelix3D(atk3D.model.position, col);
+      createFloat3D(atk3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), abilityTag(e.ability), col, 24);
+      if (e.targetHp !== undefined) {
+        foe.targetHp = e.targetHp;
+      }
+    }
+  }
+
   function applyEvent(e: BattleEvent) {
     if (use3D && fighters3D) {
       // 3D event logic
       switch (e.kind) {
         case "attack": {
           const foe = fighters[other(e.by)];
-          const atk3D = fighters3D[e.by];
           const foe3D = fighters3D[other(e.by)];
-          
-          atk3D.lunge = 1.0;
-          foe3D.shake = e.crit ? 1.0 : 0.6;
-          foe3D.flash = 1.0;
-          foe.targetHp = e.targetHp;
-          camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
-          spawnBurst3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 18 : 10, e.crit ? 0.2 : 0.12);
-          sfxHit(e.crit);
-          createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), e.crit ? `${e.dmg}!` : `${e.dmg}`, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 38 : 28);
+          triggerLungeStrike(e.by, 1.0, () => {
+            foe3D.shake = e.crit ? 1.0 : 0.6;
+            foe3D.flash = 1.0;
+            foe.targetHp = e.targetHp;
+            camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
+            spawnBurst3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 18 : 10, e.crit ? 0.2 : 0.12);
+            spawnImpactRing3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b");
+            sfxHit(e.crit);
+            createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), e.crit ? `${e.dmg}!` : `${e.dmg}`, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 38 : 28);
+          });
           break;
         }
         case "ability": {
-          const foe = fighters[other(e.by)];
-          const atk3D = fighters3D[e.by];
-          const foe3D = fighters3D[other(e.by)];
-          
-          sfxAbility();
-          if (e.ability === "spit") {
-            const startPos = atk3D.model.position.clone().add(new THREE.Vector3(e.by === "a" ? 0.8 : -0.8, 1.2, 0));
-            const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
-            const projGeo = new THREE.SphereGeometry(0.18, 8, 8);
-            const projMat = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
-            const projMesh = new THREE.Mesh(projGeo, projMat);
-            projMesh.position.copy(startPos);
-            scene3D?.add(projMesh);
-            activeProjectiles3D.push({
-              mesh: projMesh,
-              start: startPos,
-              end: endPos,
-              progress: 0,
-              speed: 0.018,
-              colorHex: "#39ff14",
-              onHit: () => {
-                foe.hitAnim = 0.9;
-                foe3D.shake = 1.0;
-                foe3D.flash = 1.0;
-                foe.targetHp = e.targetHp;
-                camShake = Math.max(camShake, 0.8);
-                spawnBurst3D(foe3D.model.position, "#39ff14", 15, 0.15);
-                createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#39ff14", 26);
+          const isSpecial = ["spit", "shock", "leech", "charge"].includes(e.ability);
+          if (isSpecial) {
+            cinematic = {
+              active: true,
+              casterSide: e.by,
+              timer: 0,
+              duration: 45,
+              ability: e.ability,
+              value: e.value,
+              targetHp: e.targetHp,
+              onComplete: () => {
+                executeAbilityVFX(e);
               }
-            });
-          } else if (e.ability === "shock") {
-            const startPos = atk3D.model.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-            const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
-            createBeam3D(startPos, endPos, "#c39bff", "lightning");
-            foe.hitAnim = 0.9;
-            foe3D.shake = 1.2;
-            foe3D.flash = 1.0;
-            foe.targetHp = e.targetHp;
-            camShake = Math.max(camShake, 0.9);
-            spawnBurst3D(foe3D.model.position, "#c39bff", 15, 0.16);
-            createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#c39bff", 26);
-          } else if (e.ability === "leech") {
-            const startPos = atk3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
-            const endPos = foe3D.model.position.clone().add(new THREE.Vector3(0, 0.8, 0));
-            createBeam3D(endPos, startPos, "#ff3b30", "tether");
-            foe.hitAnim = 0.9;
-            foe3D.shake = 1.0;
-            foe3D.flash = 1.0;
-            foe.targetHp = e.targetHp;
-            camShake = Math.max(camShake, 0.7);
-            spawnBurst3D(foe3D.model.position, "#ff3b30", 12, 0.12);
-            createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ff3b30", 26);
-          } else if (e.ability === "charge") {
-            atk3D.lunge = 1.6;
-            foe.hitAnim = 1.0;
-            foe3D.shake = 1.4;
-            foe3D.flash = 1.0;
-            foe.targetHp = e.targetHp;
-            camShake = Math.max(camShake, 1.2);
-            spawnBurst3D(foe3D.model.position, "#ffae19", 18, 0.22);
-            createFloat3D(foe3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), `${abilityTag(e.ability)} ${e.value}`, "#ffae19", 26);
+            };
           } else {
-            atk3D.flash = 0.8;
-            let col = "#7aa2ff";
-            if (e.ability === "venom") col = "#9be86c";
-            if (e.ability === "frenzy") col = "#ff6b81";
-            spawnBurst3D(atk3D.model.position, col, 14, 0.14);
-            createFloat3D(atk3D.model.position.clone().add(new THREE.Vector3(0, 2, 0)), abilityTag(e.ability), col, 24);
-            if (e.targetHp !== undefined) {
-              foe.targetHp = e.targetHp;
-            }
+            executeAbilityVFX(e);
           }
           break;
         }
@@ -1132,8 +1457,12 @@ export function playBattle(
       if (fighters3D && scene3D) {
         scene3D.remove(fighters3D.a.model);
         disposeModel(fighters3D.a.model);
+        scene3D.remove(fighters3D.a.shadow);
+        disposeModel(fighters3D.a.shadow);
         scene3D.remove(fighters3D.b.model);
         disposeModel(fighters3D.b.model);
+        scene3D.remove(fighters3D.b.shadow);
+        disposeModel(fighters3D.b.shadow);
       }
       if (arenaGroup && scene3D) {
         scene3D.remove(arenaGroup);
