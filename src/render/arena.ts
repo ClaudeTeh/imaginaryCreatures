@@ -89,6 +89,15 @@ export function playBattle(
   onDone: (winner: Side | "draw") => void,
   speedMult = 1,
 ): () => void {
+  const reduceMotion =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+  const instant = speedMult === 0 || reduceMotion;
+
+  if (instant) {
+    setTimeout(() => onDone(result.winner), 20);
+    return () => {};
+  }
+
   let ctx: CanvasRenderingContext2D | null = null;
   // Try to initialize WebGL for Three.js 3D rendering
   let use3D = false;
@@ -163,9 +172,6 @@ export function playBattle(
     b: mkView("b", sb, W - 250),
   };
 
-  const reduceMotion =
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-
   const floats: FloatText[] = [];
   const particles: Particle[] = [];
   const beams: Beam[] = [];
@@ -174,10 +180,7 @@ export function playBattle(
   const ordered = [...result.events].sort((x, y) => x.t - y.t);
   let cursor = 0;
   let currentTick = 0;
-  const instant = speedMult === 0 || reduceMotion;
-  const durationFrames = instant
-    ? clamp(result.ticks, 1, 20)
-    : clamp(Math.round(clamp(result.ticks, 200, 460) / speedMult), 1, 1200);
+  const durationFrames = clamp(Math.round(clamp(result.ticks, 450, 950) / speedMult), 1, 2400);
   const ticksPerFrame = result.ticks / durationFrames;
   let raf = 0;
   let frame = 0;
@@ -467,13 +470,13 @@ export function playBattle(
         let shakeX = 0;
         let shakeY = 0;
         if (f.shake > 0.01) {
-          f.shake *= 0.82;
+          f.shake *= 0.90;
           shakeX = (Math.random() - 0.5) * f.shake;
           shakeY = (Math.random() - 0.5) * f.shake * 0.4;
         }
 
         if (f.lunge > 0.01) {
-          f.lunge *= 0.80;
+          f.lunge *= 0.93;
         } else {
           f.lunge = 0;
         }
@@ -516,7 +519,7 @@ export function playBattle(
         
         // Emissive model flashing on damage
         if (f.flash > 0.02) {
-          f.flash *= 0.85;
+          f.flash *= 0.92;
           f.model.traverse((o) => {
             const mesh = o as THREE.Mesh;
             if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).emissive) {
@@ -659,8 +662,8 @@ export function playBattle(
     scene3D?.add(line);
     activeBeams3D.push({
       line,
-      life: kind === "lightning" ? 10 : 20,
-      maxLife: kind === "lightning" ? 10 : 20,
+      life: kind === "lightning" ? 22 : 40,
+      maxLife: kind === "lightning" ? 22 : 40,
       kind,
       x1: from.x, y1: from.y, z1: from.z,
       x2: to.x, y2: to.y, z2: to.z,
@@ -732,7 +735,7 @@ export function playBattle(
               start: startPos,
               end: endPos,
               progress: 0,
-              speed: 0.04,
+              speed: 0.018,
               colorHex: "#39ff14",
               onHit: () => {
                 foe.hitAnim = 0.9;
