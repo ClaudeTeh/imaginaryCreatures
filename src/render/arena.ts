@@ -111,6 +111,7 @@ export function playBattle(
   let ringGeo: THREE.TorusGeometry | null = null;
   let ringMat: THREE.MeshStandardMaterial | null = null;
   let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
+  let slowMoTimer = 0;
 
   let ambientLight: THREE.AmbientLight | null = null;
   let keyLight: THREE.DirectionalLight | null = null;
@@ -132,6 +133,7 @@ export function playBattle(
     dodgeDir: number;
     blinkTimer: number;
     deathTimer: number;
+    actionTimerAccumulator: number;
     onHitCallback?: () => void;
   }
 
@@ -315,6 +317,7 @@ export function playBattle(
         dodgeDir: 0,
         blinkTimer: 0,
         deathTimer: 0,
+        actionTimerAccumulator: 0,
       },
       b: {
         model: buildCreatureModel(sb.genome as unknown as Genome),
@@ -331,6 +334,7 @@ export function playBattle(
         dodgeDir: 0,
         blinkTimer: 0,
         deathTimer: 0,
+        actionTimerAccumulator: 0,
       },
     };
 
@@ -400,10 +404,16 @@ export function playBattle(
   function step() {
     frame++;
 
+    let timeScale = 1.0;
+    if (use3D && slowMoTimer > 0) {
+      slowMoTimer--;
+      timeScale = 0.28;
+    }
+
     if (use3D && cinematic.active) {
       // Pause simulation progress during cinematic animations, but let frame advance
     } else {
-      currentTick += ticksPerFrame;
+      currentTick += ticksPerFrame * timeScale;
       while (cursor < ordered.length && ordered[cursor].t <= currentTick) {
         applyEvent(ordered[cursor]);
         cursor++;
@@ -501,7 +511,7 @@ export function playBattle(
       // Update active 3D projectiles
       for (let i = activeProjectiles3D.length - 1; i >= 0; i--) {
         const pr = activeProjectiles3D[i];
-        pr.progress += pr.speed;
+        pr.progress += pr.speed * timeScale;
         if (pr.progress >= 1.0) {
           scene3D.remove(pr.mesh);
           pr.mesh.geometry.dispose();
@@ -523,7 +533,7 @@ export function playBattle(
             mesh: trailMesh,
             velocity: new THREE.Vector3((Math.random() - 0.5) * 0.01, 0.01, (Math.random() - 0.5) * 0.01),
             life: 0.4,
-            decay: 0.04,
+            decay: 0.04 * timeScale,
           });
         }
       }
@@ -531,15 +541,15 @@ export function playBattle(
       // Update active 3D particles
       for (let i = activeParticles3D.length - 1; i >= 0; i--) {
         const p = activeParticles3D[i];
-        p.mesh.position.add(p.velocity);
+        p.mesh.position.addScaledVector(p.velocity, timeScale);
         if (p.mesh.geometry.type === "RingGeometry") {
-          p.mesh.scale.addScalar(0.14);
+          p.mesh.scale.addScalar(0.14 * timeScale);
         } else if (p.mesh.geometry.type === "IcosahedronGeometry") {
-          p.mesh.scale.addScalar(0.015);
+          p.mesh.scale.addScalar(0.015 * timeScale);
         } else if (p.mesh.geometry.type === "BoxGeometry") {
-          p.velocity.y -= 0.005; // gravity for debris
-          p.mesh.rotation.x += 0.04;
-          p.mesh.rotation.y += 0.06;
+          p.velocity.y -= 0.005 * timeScale; // gravity for debris
+          p.mesh.rotation.x += 0.04 * timeScale;
+          p.mesh.rotation.y += 0.06 * timeScale;
           if (p.mesh.position.y < 0.05 && p.velocity.y < 0) {
             p.mesh.position.y = 0.05;
             p.velocity.y = -p.velocity.y * 0.45; // bounce!
@@ -548,11 +558,11 @@ export function playBattle(
           }
         } else {
           if ((p.mesh.material as THREE.MeshBasicMaterial).color.getHexString() === "b0b6c2") {
-            p.mesh.scale.addScalar(0.06);
+            p.mesh.scale.addScalar(0.06 * timeScale);
           }
-          p.velocity.y -= 0.003; // gravity
+          p.velocity.y -= 0.003 * timeScale; // gravity
         }
-        p.life -= p.decay;
+        p.life -= p.decay * timeScale;
         (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, p.life);
         if (p.life <= 0) {
           scene3D.remove(p.mesh);
@@ -692,87 +702,106 @@ export function playBattle(
         const otherSide = side === "a" ? "b" : "a";
         const targetF = fighters3D[otherSide];
 
-        f.time += 0.016;
+        f.time += 0.016 * timeScale;
 
-        // Action State machine transitions
-        if (f.actionState === "windup") {
-          f.actionTimer++;
-          f.lunge = -0.4 * (f.actionTimer / f.actionDuration);
-          f.model.rotation.z = side === "a" ? -0.12 : 0.12;
-          if (f.actionTimer >= f.actionDuration) {
-            f.actionState = "strike";
-            f.actionTimer = 0;
-            f.actionDuration = 5;
-            // Takeoff lunge dust cloud!
-            spawnDustCloud3D(f.model.position, 8);
+        // Action State machine transitions (tick-based)
+        f.actionTimerAccumulator += timeScale;
+        let elapsedTicks = 0;
+        if (f.actionTimerAccumulator >= 1.0) {
+          elapsedTicks = Math.floor(f.actionTimerAccumulator);
+          f.actionTimerAccumulator -= elapsedTicks;
+        }
+
+        for (let tick = 0; tick < elapsedTicks; tick++) {
+          if (f.actionState === "windup") {
+            f.actionTimer++;
+            if (f.actionTimer >= f.actionDuration) {
+              f.actionState = "strike";
+              f.actionTimer = 0;
+              f.actionDuration = 5;
+              // Takeoff lunge dust cloud!
+              spawnDustCloud3D(f.model.position, 8);
+            }
+          } else if (f.actionState === "strike") {
+            f.actionTimer++;
+
+            // --- Genome-specific mid-strike VFX trails ---
+            const fvStrike = fView;
+            const isAvianStrike   = fvStrike.genome.forelimbs === "eagle" || fvStrike.genome.body === "eagle";
+            const isClawStrike    = ["crab", "scorpion", "eagle"].includes(fvStrike.genome.forelimbs);
+            const isGorillaStrike = fvStrike.genome.forelimbs === "gorilla";
+            const isSerpStrike    = ["cobra", "eel"].includes(fvStrike.genome.body);
+
+            if (isAvianStrike && Math.random() < 0.7) {
+              spawnSpeedLine3D(f.model.position, side);
+            }
+            if (isGorillaStrike && f.actionTimer === 1) {
+              spawnDustCloud3D(f.model.position, 18);
+            }
+            if (isSerpStrike && Math.random() < 0.4) {
+              spawnBurst3D(f.model.position.clone().add(new THREE.Vector3(0, 0.4, 0)), "#39ff14", 3, 0.07);
+            }
+
+            if (f.actionTimer >= f.actionDuration) {
+              if (f.onHitCallback) {
+                f.onHitCallback();
+                f.onHitCallback = undefined;
+              }
+              // Spawn claw slash on hit frame
+              if (isClawStrike) {
+                spawnClawSlash3D(f.model.position, side);
+              }
+              f.actionState = "recover";
+              f.actionTimer = 0;
+              f.actionDuration = 18;
+            }
+          } else if (f.actionState === "recover") {
+            f.actionTimer++;
+            if (f.actionTimer >= f.actionDuration) {
+              f.actionState = "idle";
+              f.actionTimer = 0;
+            }
+          } else if (f.actionState === "dodge") {
+            f.actionTimer++;
+            if (f.actionTimer >= f.actionDuration) {
+              f.actionState = "idle";
+              f.actionTimer = 0;
+            }
+          } else {
+            // Random idle side-steps/dodges
+            if (Math.random() < 0.003 && fView.displayHp > 0.5) {
+              f.actionState = "dodge";
+              f.actionTimer = 0;
+              f.actionDuration = 24;
+              f.dodgeDir = Math.random() < 0.5 ? 1 : -1;
+            }
           }
+        }
+
+        // Sub-frame interpolated positioning and rotations
+        const smoothActionTimer = f.actionTimer + f.actionTimerAccumulator;
+        if (f.actionState === "windup") {
+          const progress = Math.min(1.0, smoothActionTimer / f.actionDuration);
+          f.lunge = -0.4 * progress;
+          f.model.rotation.z = side === "a" ? -0.12 : 0.12;
         } else if (f.actionState === "strike") {
-          f.actionTimer++;
-          const progress = f.actionTimer / f.actionDuration;
+          const progress = Math.min(1.0, smoothActionTimer / f.actionDuration);
           f.lunge = -0.4 + 2.2 * progress;
           f.model.rotation.z = side === "a" ? 0.22 : -0.22;
-
-          // --- Genome-specific mid-strike VFX trails ---
-          const fvStrike = fView;
-          const isAvianStrike   = fvStrike.genome.forelimbs === "eagle" || fvStrike.genome.body === "eagle";
-          const isClawStrike    = ["crab", "scorpion", "eagle"].includes(fvStrike.genome.forelimbs);
-          const isGorillaStrike = fvStrike.genome.forelimbs === "gorilla";
-          const isSerpStrike    = ["cobra", "eel"].includes(fvStrike.genome.body);
-
-          if (isAvianStrike && Math.random() < 0.7) {
-            spawnSpeedLine3D(f.model.position, side);
-          }
-          if (isGorillaStrike && f.actionTimer === 1) {
-            spawnDustCloud3D(f.model.position, 18);
-          }
-          if (isSerpStrike && Math.random() < 0.4) {
-            spawnBurst3D(f.model.position.clone().add(new THREE.Vector3(0, 0.4, 0)), "#39ff14", 3, 0.07);
-          }
-
-          if (f.actionTimer >= f.actionDuration) {
-            if (f.onHitCallback) {
-              f.onHitCallback();
-              f.onHitCallback = undefined;
-            }
-            // Spawn claw slash on hit frame
-            if (isClawStrike) {
-              spawnClawSlash3D(f.model.position, side);
-            }
-            f.actionState = "recover";
-            f.actionTimer = 0;
-            f.actionDuration = 18;
-          }
         } else if (f.actionState === "recover") {
-          f.actionTimer++;
-          const progress = f.actionTimer / f.actionDuration;
+          const progress = Math.min(1.0, smoothActionTimer / f.actionDuration);
           f.lunge = 1.8 * (1 - progress * (2 - progress));
           f.model.rotation.z = 0;
-          if (f.actionTimer >= f.actionDuration) {
-            f.actionState = "idle";
-            f.lunge = 0;
-          }
         } else if (f.actionState === "dodge") {
-          f.actionTimer++;
           const half = f.actionDuration / 2;
-          if (f.actionTimer < half) {
-            f.dodgeOffset = f.dodgeDir * 1.5 * (f.actionTimer / half);
+          if (smoothActionTimer < half) {
+            f.dodgeOffset = f.dodgeDir * 1.5 * (smoothActionTimer / half);
           } else {
-            f.dodgeOffset = f.dodgeDir * 1.5 * (1 - (f.actionTimer - half) / half);
-          }
-          if (f.actionTimer >= f.actionDuration) {
-            f.actionState = "idle";
-            f.dodgeOffset = 0;
+            f.dodgeOffset = f.dodgeDir * 1.5 * (1 - (smoothActionTimer - half) / half);
           }
         } else {
           f.lunge = 0;
           f.dodgeOffset = 0;
-          // Random idle side-steps/dodges
-          if (Math.random() < 0.003 && fView.displayHp > 0.5) {
-            f.actionState = "dodge";
-            f.actionTimer = 0;
-            f.actionDuration = 24;
-            f.dodgeDir = Math.random() < 0.5 ? 1 : -1;
-          }
         }
 
         const dirVec = targetF.basePos.clone().sub(f.basePos).normalize();
@@ -1724,6 +1753,9 @@ export function playBattle(
             foe3D.flash = 1.0;
             foe.targetHp = e.targetHp;
             camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
+            if (e.crit) {
+              slowMoTimer = 35;
+            }
             spawnBurst3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 18 : 10, e.crit ? 0.2 : 0.12);
             spawnImpactRing3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b");
             if (e.crit || fighters[e.by].genome.forelimbs === "gorilla") {
