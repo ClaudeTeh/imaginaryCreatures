@@ -1270,6 +1270,17 @@ export function playBattle(
             headPart.rotation.x += (targetRotX - headPart.rotation.x) * 0.1;
           }
         }
+        
+        // Random idle vocalization soundwaves
+        if (alive && f.actionState === "idle" && Math.random() < 0.0015 * timeScale) {
+          const headPartForVocal = f.model.getObjectByName("head");
+          if (headPartForVocal) {
+            const mouthPos = new THREE.Vector3();
+            headPartForVocal.getWorldPosition(mouthPos);
+            mouthPos.z += side === "a" ? 0.5 : -0.5;
+            spawnSoundwaveRing3D(mouthPos, "#c39bff");
+          }
+        }
 
         // Update rabbit ears physics (spring bounce)
         const earL0 = f.model.getObjectByName("ear_l_0");

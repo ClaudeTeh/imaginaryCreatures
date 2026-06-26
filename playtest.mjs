@@ -42,6 +42,19 @@ async function waitForServer(url, tries = 50) {
   throw new Error("preview server did not start");
 }
 
+async function dismissTutorial(page) {
+  const overlay = page.locator(".tutorial-overlay");
+  if (await overlay.isVisible()) {
+    log("tutorial overlay visible; dismissing");
+    await page.getByRole("button", { name: "Next →" }).click();
+    await page.waitForTimeout(100);
+    await page.getByRole("button", { name: "Next →" }).click();
+    await page.waitForTimeout(100);
+    await page.getByRole("button", { name: "Start Playing" }).click();
+    await page.waitForTimeout(150);
+  }
+}
+
 const server = startPreview();
 let browser;
 
@@ -65,6 +78,7 @@ try {
   await page.addInitScript(() => localStorage.clear());
   await page.goto(base, { waitUntil: "domcontentloaded" });
   log("page loaded");
+  await dismissTutorial(page);
 
   await page.waitForSelector(".creature-name", { timeout: 5000 });
   const name1 = (await page.textContent(".creature-name"))?.trim();
@@ -77,12 +91,11 @@ try {
   log("keyboard randomize OK");
 
   // Change the head slot -> creature should rebuild
-  const firstSelect = page.locator(".slot select").first();
-  const optionValues = await firstSelect
-    .locator("option")
-    .evaluateAll((os) => os.map((o) => o.value));
-  if (optionValues.length < 2) throw new Error("not enough unlocked animals to test slot change");
-  await firstSelect.selectOption(optionValues[optionValues.length - 1]);
+  const firstSlot = page.locator(".slot").first();
+  const cards = firstSlot.locator(".animal-card:not(.selected):not(.locked)");
+  const count = await cards.count();
+  if (count < 1) throw new Error("not enough unlocked animals to test slot change");
+  await cards.first().click();
   await page.waitForTimeout(150);
   log("changed head slot");
 
@@ -153,6 +166,7 @@ try {
   });
   await rmPage.addInitScript(() => localStorage.clear());
   await rmPage.goto(base, { waitUntil: "domcontentloaded" });
+  await dismissTutorial(rmPage);
   await rmPage.getByRole("button", { name: "Enter Arena" }).click();
   const t0 = Date.now();
   await rmPage.waitForSelector(".result-banner", { timeout: 15000 });
