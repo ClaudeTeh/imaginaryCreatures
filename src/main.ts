@@ -200,6 +200,16 @@ function settingsBar(): HTMLElement {
     ["📖 Bestiary"],
   );
 
+  const dailyBtn = el(
+    "button",
+    {
+      class: "settings-btn",
+      title: "Daily Challenge — same opponent for everyone today",
+      onclick: () => startDailyChallenge(),
+    },
+    ["📅 Daily"],
+  );
+
   const row = el("div", { class: "settings-bar" }, [
     el("div", { class: "settings-group" }, [
       el("span", { class: "settings-label" }, ["Speed"]),
@@ -208,6 +218,7 @@ function settingsBar(): HTMLElement {
     el("div", { class: "settings-group" }, [oppBtn]),
     el("div", { class: "settings-group" }, [newGameBtn]),
     el("div", { class: "settings-group" }, [bestiaryBtn]),
+    el("div", { class: "settings-group" }, [dailyBtn]),
   ]);
 
   if (newGameExpanded) {
@@ -705,6 +716,103 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+function dailySeed(): number {
+  const d = new Date();
+  return (d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 2654435761 >>> 0;
+}
+
+function startDailyChallenge(): void {
+  initAudio();
+  const seed = dailySeed();
+  const rng = makeRng(seed);
+  const oppAnimal = ANIMALS[Math.floor(rng() * ANIMALS.length)];
+  const oppGenome = pureGenome(oppAnimal.id);
+  const opponent = buildCreature(oppGenome);
+
+  const player = buildCreature(state.player);
+  const result = simulateBattle(player, opponent, makeRng(seed ^ 0xdeadbeef));
+
+  screen = "arena";
+  clear(app);
+
+  const canvas = el("canvas", {
+    id: "arena",
+    role: "img",
+    "aria-label": "Daily challenge arena",
+  }) as HTMLCanvasElement;
+  const resultArea = el("div", { class: "center" }, []);
+
+  app.append(
+    topbar(),
+    el("div", { class: "panel arena-wrap" }, [
+      el("div", { class: "arena-fighters" }, [
+        el("div", { class: "fighter-tag" }, [
+          el("div", { class: "nm" }, [`${player.emoji} ${player.name}`]),
+          el("div", { class: "pw" }, [`Power ${powerRating(player)}`]),
+        ]),
+        el("div", { class: "fighter-tag right" }, [
+          el("div", { class: "nm" }, [`${opponent.name} ${opponent.emoji}`]),
+          el("div", { class: "pw" }, [`📅 Daily · Power ${powerRating(opponent)}`]),
+        ]),
+      ]),
+      canvas,
+      resultArea,
+    ]),
+  );
+
+  const speedMult = SPEED_OPTS.find((s) => s.id === state.battleSpeed)?.mult ?? 1;
+  cancelArena = playBattle(canvas, result, (winner) => {
+    cancelArena = null;
+    showResult(resultArea, winner, `Daily ${oppAnimal.name}`);
+  }, speedMult);
+}
+
+function showTutorial(): void {
+  if (localStorage.getItem("ic-tutorial-done")) return;
+  const appEl = document.getElementById("app")!;
+  let step = 0;
+
+  const steps = [
+    { icon: "🧬", title: "Splice Your Creature", body: "Pick one part from each animal — head, body, arms, legs, tail. Each part brings stats and abilities." },
+    { icon: "⚔", title: "Battle to Unlock", body: "Win fights to unlock more species. Build the ultimate chimera." },
+    { icon: "🔥", title: "Chain Your Wins", body: "Keep a win streak to prove your creature is unbeatable. Check the Bestiary to see all species." },
+  ];
+
+  const overlay = el("div", { class: "tutorial-overlay" }, []);
+
+  const render = () => {
+    const s = steps[step];
+    const isLast = step === steps.length - 1;
+    overlay.innerHTML = "";
+    overlay.append(
+      el("div", { class: "tutorial-card" }, [
+        el("div", { class: "tutorial-icon" }, [s.icon]),
+        el("div", { class: "tutorial-title" }, [s.title]),
+        el("div", { class: "tutorial-body" }, [s.body]),
+        el("div", { class: "tutorial-dots" }, steps.map((_, i) =>
+          el("span", { class: i === step ? "tutorial-dot active" : "tutorial-dot" }, [])
+        )),
+        el("button", {
+          class: "accent",
+          onclick: () => {
+            if (isLast) {
+              localStorage.setItem("ic-tutorial-done", "1");
+              overlay.remove();
+            } else {
+              step++;
+              render();
+            }
+          }
+        }, [isLast ? "Start Playing" : "Next →"]),
+      ])
+    );
+  };
+
+  render();
+  appEl.append(overlay);
+}
+
 // sanity: ensure data integrity at boot (helps catch a broken save/build)
 if (ANIMALS.length === 0) throw new Error("No animals defined");
 renderLab();
+showTutorial();
