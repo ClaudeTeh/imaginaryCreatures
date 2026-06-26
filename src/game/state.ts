@@ -13,6 +13,7 @@ export interface GameState {
   player: Genome;
   wins: number;
   losses: number;
+  streak: number;
   /** Persistent seed bumped each battle so replays vary run to run. */
   seed: number;
   muted: boolean;
@@ -42,6 +43,7 @@ export function newGame(startTier: 1 | 2 | 3 = 1, currentState?: Partial<GameSta
     player: pureGenome(startAnimal),
     wins: 0,
     losses: 0,
+    streak: 0,
     seed: randomSeed(),
     muted: currentState?.muted ?? false,
     roster: [],
@@ -63,6 +65,7 @@ export function load(): GameState {
       player,
       wins: data.wins ?? 0,
       losses: data.losses ?? 0,
+      streak: data.streak ?? 0,
       seed: data.seed ?? randomSeed(),
       muted: data.muted ?? false,
       roster: sanitizeRoster(data.roster, validIds),
