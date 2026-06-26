@@ -2334,6 +2334,11 @@ export function playBattle(
         f.sprite.material.map?.dispose();
         f.sprite.material.dispose();
       });
+      if (biomeParticleSystem && scene3D) {
+        scene3D.remove(biomeParticleSystem.mesh);
+        biomeParticleSystem.mesh.geometry.dispose();
+        (biomeParticleSystem.mesh.material as THREE.Material).dispose();
+      }
       renderer3D?.dispose();
     }
   };
