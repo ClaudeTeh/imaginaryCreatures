@@ -1,5 +1,5 @@
 import type { BattleEvent, BattleResult, Side } from "../combat/combat";
-import { sfxAbility, sfxHeal, sfxHit } from "./sound";
+import { sfxAbility, sfxDeath, sfxHeal, sfxHit, sfxRoar, sfxVocalize } from "./sound";
 import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
 import * as THREE from "three";
 import { buildCreatureModel, createSoftShadowMesh } from "./creature3d";
@@ -682,6 +682,7 @@ export function playBattle(
         spawnGroundCrack3D(fighters3D.b.model.position, 1.2);
         spawnDebris3D(fighters3D.a.model.position, 8);
         spawnDebris3D(fighters3D.b.model.position, 8);
+        sfxRoar();
       }
 
       // Soundwave cries from mouths during roar
@@ -719,8 +720,10 @@ export function playBattle(
               const vocalColor = fView.genome.body === "eel" ? "#50e8d0"
                 : fView.genome.body === "cobra" ? "#a8e030"
                 : fView.genome.body === "dragon" ? "#ff6030"
+                : fView.genome.body === "jellyfish" ? "#b060ff"
                 : "#e8d8a0";
               spawnSoundwaveRing3D(mouthPos, vocalColor);
+              sfxVocalize(vocalColor);
             }
             f.vocalTimer = Math.floor(Math.random() * 300 + 480);
           }
@@ -1666,7 +1669,7 @@ export function playBattle(
     const foe = fighters[other(e.by)];
     const atk3D = fighters3D![e.by];
     const foe3D = fighters3D![other(e.by)];
-    sfxAbility();
+    sfxAbility(e.ability as Parameters<typeof sfxAbility>[0]);
     
     if (e.ability === "spit") {
       const startPos = atk3D.model.position.clone().add(new THREE.Vector3(e.by === "a" ? 0.8 : -0.8, 1.2, 0));
@@ -1813,6 +1816,7 @@ export function playBattle(
         case "poison": {
           const f = fighters[e.on];
           f.targetHp = e.hp;
+          sfxAbility("venom");
           const f3D = fighters3D[e.on];
           f3D.flash = 0.5;
           spawnBurst3D(f3D.model.position, "#9be86c", 8, 0.1);
@@ -1833,6 +1837,7 @@ export function playBattle(
           f.flash = 1;
           const f3D = fighters3D[e.side];
           f3D.flash = 1.0;
+          sfxDeath();
           break;
         }
       }
@@ -1860,7 +1865,7 @@ export function playBattle(
           atk.attackAnim = 0.8;
           atk.lunge = 55;
           atk.flash = 0.6;
-          sfxAbility();
+          sfxAbility(e.ability as Parameters<typeof sfxAbility>[0]);
           const heals = e.value < 0;
           if (!heals && (e.ability === "venom" || e.ability === "armor" || e.ability === "frenzy")) {
             spawnBurst(atk, "#7aa2ff", 8, 2.6);
@@ -1880,6 +1885,7 @@ export function playBattle(
           const f = fighters[e.on];
           f.targetHp = e.hp;
           f.flash = Math.max(f.flash, 0.5);
+          sfxAbility("venom");
           spawnBurst(f, "#9be86c", 5, 2);
           addFloat(f, `☠ ${e.dmg}`, "#9be86c", 20);
           break;
@@ -1894,6 +1900,7 @@ export function playBattle(
         }
         case "death": {
           fighters[e.side].flash = 1;
+          sfxDeath();
           break;
         }
       }

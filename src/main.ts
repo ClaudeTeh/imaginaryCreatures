@@ -104,6 +104,7 @@ function topbar(): HTMLElement {
           class: "pill",
           title: "Toggle sound",
           onclick: (e) => {
+            initAudio();
             const muted = toggleMuted();
             state.muted = muted;
             save(state);
