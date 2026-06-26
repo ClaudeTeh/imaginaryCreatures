@@ -1,5 +1,5 @@
 import type { BattleEvent, BattleResult, Side } from "../combat/combat";
-import { sfxAbility, sfxDeath, sfxHeal, sfxHit, sfxRoar, sfxVocalize, startBattleMusic, startBiomeAmbient } from "./sound";
+import { sfxAbility, sfxDeath, sfxHeal, sfxHit, sfxRoar, sfxVocalize, startBattleMusic, startBiomeAmbient, setBattleMusicTempo } from "./sound";
 import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
 import * as THREE from "three";
 import { buildCreatureModel, createSoftShadowMesh } from "./creature3d";
@@ -259,6 +259,7 @@ export function playBattle(
   const activeFloats3D: Float3D[] = [];
 
   let hudOverlay: HTMLElement | null = null;
+  let vignetteEl: HTMLDivElement | null = null;
   let statusBarA: HTMLDivElement | null = null;
   let statusBarB: HTMLDivElement | null = null;
   let speedLinesCanvas: HTMLCanvasElement | null = null;
@@ -537,6 +538,11 @@ export function playBattle(
     statusBarB.className = "status-bar status-bar-b";
     hudOverlay.appendChild(statusBarA);
     hudOverlay.appendChild(statusBarB);
+
+    vignetteEl = document.createElement("div");
+    vignetteEl.className = "hp-vignette";
+    vignetteEl.style.opacity = "0";
+    hudOverlay.appendChild(vignetteEl);
 
     speedLinesCanvas = document.createElement("canvas");
     speedLinesCanvas.width = W;
@@ -1393,6 +1399,19 @@ export function playBattle(
         oFill.style.width = `${oPct}%`;
         oFill.style.background = oPct > 30 ? "linear-gradient(90deg, #36c08a, #6ce5b1)" : "linear-gradient(90deg, #ff6b81, #ff97a6)";
         oText.textContent = `${Math.max(0, Math.round(fighters.b.displayHp))}/${fighters.b.maxHp}`;
+      }
+
+      // Low-HP vignette + dynamic music tempo
+      const aView = fighters["a"];
+      const hpPct = aView.displayHp / aView.maxHp;
+      if (hpPct < 0.25 && aView.displayHp > 0) {
+        const intensity = (0.25 - hpPct) / 0.25; // 0..1 as HP goes 25% → 0
+        const pulse = 0.6 + Math.sin(Date.now() * 0.005) * 0.4;
+        if (vignetteEl) vignetteEl.style.opacity = String(intensity * pulse * 0.7);
+        setBattleMusicTempo(true);
+      } else {
+        if (vignetteEl) vignetteEl.style.opacity = "0";
+        setBattleMusicTempo(false);
       }
     } else {
       // 2D Fallback path rendering
@@ -2381,6 +2400,7 @@ export function playBattle(
   return () => {
     stopMusic();
     stopAmbient();
+    setBattleMusicTempo(false);
     cancelAnimationFrame(raf);
     if (use3D) {
       if (hudOverlay) {

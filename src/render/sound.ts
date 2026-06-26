@@ -186,6 +186,12 @@ export function sfxDeath(): void {
   tone(200, 0.5, "sawtooth", 0.1, 40, 80);
 }
 
+let battleMusicTempo = 420; // ms between notes — lower = faster
+
+export function setBattleMusicTempo(fast: boolean): void {
+  battleMusicTempo = fast ? 280 : 420;
+}
+
 export function startBattleMusic(biomeKind: string): () => void {
   if (muted || !ctx) return () => {};
 
@@ -211,7 +217,7 @@ export function startBattleMusic(biomeKind: string): () => void {
     // Occasional bass note
     if (noteIdx % 4 === 0) tone(note / 2, 0.6, "sine", 0.03);
     noteIdx++;
-    timer = setTimeout(playNext, 420);
+    timer = setTimeout(playNext, battleMusicTempo);
   };
 
   // Start after a 600ms delay so the battle intro sound finishes first

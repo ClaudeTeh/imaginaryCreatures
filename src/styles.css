@@ -855,3 +855,12 @@ canvas#arena {
   color: #5a7090;
   line-height: 1.8;
 }
+.hp-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  box-shadow: inset 0 0 80px 30px rgba(220, 30, 30, 0.6);
+  transition: opacity 0.1s;
+  z-index: 10;
+}
