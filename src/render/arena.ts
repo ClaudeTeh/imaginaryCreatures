@@ -110,6 +110,7 @@ export function playBattle(
   let platMat: THREE.MeshStandardMaterial | null = null;
   let ringGeo: THREE.TorusGeometry | null = null;
   let ringMat: THREE.MeshStandardMaterial | null = null;
+  let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
 
   let ambientLight: THREE.AmbientLight | null = null;
   let keyLight: THREE.DirectionalLight | null = null;
@@ -1067,24 +1068,32 @@ export function playBattle(
           wingL.rotation.z = -flap;
         }
         
-        // Emissive model flashing on damage
-        if (f.flash > 0.02) {
+        // Hit-flash white material on damage
+        if (f.flash > 0.5) {
           f.flash *= 0.92;
+          if (!flashWhiteMaterial) {
+            flashWhiteMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          }
           f.model.traverse((o) => {
             const mesh = o as THREE.Mesh;
-            if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).emissive) {
-              const mat = mesh.material as THREE.MeshStandardMaterial;
-              mat.emissive.setHex(0xff3355);
-              mat.emissiveIntensity = f.flash * 2.0;
+            if (mesh.isMesh && mesh.material) {
+              if (!(mesh as any).originalMaterial) {
+                (mesh as any).originalMaterial = mesh.material;
+              }
+              mesh.material = flashWhiteMaterial!;
             }
           });
         } else {
-          f.flash = 0;
+          if (f.flash > 0.02) {
+            f.flash *= 0.92;
+          } else {
+            f.flash = 0;
+          }
           f.model.traverse((o) => {
             const mesh = o as THREE.Mesh;
-            if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).emissive) {
-              const mat = mesh.material as THREE.MeshStandardMaterial;
-              mat.emissive.setHex(0x000000);
+            if (mesh.isMesh && (mesh as any).originalMaterial) {
+              mesh.material = (mesh as any).originalMaterial;
+              delete (mesh as any).originalMaterial;
             }
           });
         }
