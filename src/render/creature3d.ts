@@ -11,6 +11,16 @@
 import * as THREE from "three";
 import { SLOTS, type Genome, type Slot } from "../core/types";
 import { ANIMAL_COLORS, type PartColors } from "./creatureParts";
+import { ANIMALS } from "../data/animals";
+import {
+  getModelPart,
+  applyToonStyle,
+  fitToBox,
+  PART_TARGET_SIZE,
+  preloadAllModels,
+} from "./modelLoader";
+
+export const modelsReady: Promise<void> = preloadAllModels(ANIMALS.map((a) => a.id));
 
 function colorsFor(animalId: string): PartColors {
   return ANIMAL_COLORS[animalId] ?? ANIMAL_COLORS.boar;
@@ -370,6 +380,14 @@ function addEyes(head: THREE.Object3D, y: number, z: number, r = 0.09) {
 
 /** BODY — central torso, tinted by the body donor; shape varies a little by animal. */
 function buildBody(animalId: string): THREE.Group {
+  const cached = getModelPart(animalId, "body");
+  if (cached) {
+    const g = cached.clone();
+    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
+    fitToBox(g, PART_TARGET_SIZE.body);
+    return g;
+  }
+  // --- existing procedural code below — do not change ---
   const g = new THREE.Group();
   const c = colorsFor(animalId);
 
@@ -509,6 +527,14 @@ function buildBody(animalId: string): THREE.Group {
 
 /** HEAD — sits forward+up; per-animal features (ears, horns, beak, hood…). */
 function buildHead(animalId: string): THREE.Group {
+  const cached = getModelPart(animalId, "head");
+  if (cached) {
+    const g = cached.clone();
+    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
+    fitToBox(g, PART_TARGET_SIZE.head);
+    return g;
+  }
+  // --- existing procedural code below — do not change ---
   const g = new THREE.Group();
   g.scale.setScalar(0.82); // keep head proportional to the torso
   const c = colorsFor(animalId);
@@ -694,6 +720,15 @@ function buildHead(animalId: string): THREE.Group {
 
 /** A limb pair: two angled cylinders + foot spheres, tinted by the donor. */
 function buildLimbs(animalId: string, front: boolean): THREE.Group {
+  const part = front ? "forelimbs" : "hindlimbs";
+  const cached = getModelPart(animalId, part);
+  if (cached) {
+    const g = cached.clone();
+    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
+    fitToBox(g, PART_TARGET_SIZE[part]);
+    return g;
+  }
+  // --- existing procedural code below — do not change ---
   const g = new THREE.Group();
   const c = colorsFor(animalId);
   const z = front ? 0.45 : -0.5;
@@ -949,6 +984,14 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
 
 /** TAIL — a hierarchical bone chain of segments parented to each other for tail physics. */
 function buildTail(animalId: string): THREE.Group {
+  const cached = getModelPart(animalId, "tail");
+  if (cached) {
+    const g = cached.clone();
+    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
+    fitToBox(g, PART_TARGET_SIZE.tail);
+    return g;
+  }
+  // --- existing procedural code below — do not change ---
   const root = new THREE.Group();
   root.name = "tail";
   const c = colorsFor(animalId);
