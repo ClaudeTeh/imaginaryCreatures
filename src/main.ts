@@ -339,6 +339,7 @@ function positionTooltip(tooltip: HTMLElement, anchor: HTMLElement): void {
 }
 
 function renderLab() {
+  document.querySelectorAll(".card-tooltip").forEach((t) => t.remove());
   if (cancelArena) {
     cancelArena();
     cancelArena = null;
