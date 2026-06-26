@@ -843,7 +843,7 @@ function buildHead(animalId: string): THREE.Group {
     }
     case "cobra": {
       // flared snake hood
-      const hood = sphere(0.55, c.fill); hood.scale.set(1.5, 1.4, 0.3); hood.position.set(0, 0.1, -0.2); g.add(hood);
+      const hood = sphere(0.55, c.fill); hood.name = "hood"; hood.scale.set(1.5, 1.4, 0.3); hood.position.set(0, 0.1, -0.2); g.add(hood);
       // fangs
       for (const s of [-1, 1] as const) {
         const fang = cone(0.04, 0.22, "#ffffff", { noTexture: true });
@@ -857,7 +857,11 @@ function buildHead(animalId: string): THREE.Group {
     case "scorpion": {
       // mandibles + antennae
       for (const s of [-1, 1] as const) {
-        const m = cyl(0.03, 0.05, 0.4, c.shade, { noTexture: true }); m.position.set(s * 0.18, -0.25, 0.5); m.rotation.x = 1.1; g.add(m);
+        const m = cyl(0.03, 0.05, 0.4, c.shade, { noTexture: true });
+        m.name = `mandible_${s === 1 ? "r" : "l"}`;
+        m.position.set(s * 0.18, -0.25, 0.5);
+        m.rotation.x = 1.1;
+        g.add(m);
       }
       if (animalId === "ant") for (const s of [-1, 1] as const) {
         const ant = cyl(0.02, 0.02, 0.5, c.accent, { noTexture: true }); ant.position.set(s * 0.18, 0.6, 0.2); ant.rotation.z = -s * 0.4; g.add(ant);
@@ -899,6 +903,63 @@ function buildHead(animalId: string): THREE.Group {
         const arm = cyl(0.03, 0.02, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.6, noTexture: true });
         arm.position.set(Math.cos(angle) * 0.28, -0.5, Math.sin(angle) * 0.28);
         g.add(arm);
+      }
+      break;
+    }
+    case "ox": {
+      for (const s of [-1, 1] as const) {
+        const horn = cone(0.12, 0.65, "#e5dec9", { rough: 0.4, noTexture: true });
+        horn.position.set(s * 0.32, 0.52, 0.15);
+        horn.rotation.set(0.2, 0, -s * 0.9);
+        g.add(horn);
+      }
+      ears(0.36, 0.14, 1.25);
+      break;
+    }
+    case "bat": {
+      for (const s of [-1, 1] as const) {
+        const ear = cone(0.2, 0.55, c.fill);
+        ear.name = `bat_ear_${s === 1 ? "r" : "l"}`;
+        ear.position.set(s * 0.3, 0.58, -0.05);
+        ear.rotation.set(0.1, 0, -s * 0.15);
+        g.add(ear);
+      }
+      const noseLeaf = cone(0.08, 0.22, c.accent, { noTexture: true });
+      noseLeaf.position.set(0, 0.05, 0.58);
+      noseLeaf.rotation.x = -0.45;
+      g.add(noseLeaf);
+      break;
+    }
+    case "shark": {
+      const snout = cone(0.32, 0.62, c.fill);
+      snout.position.set(0, -0.05, 0.45);
+      snout.rotation.x = 1.35;
+      g.add(snout);
+      for (let i = -2; i <= 2; i++) {
+        const tooth = cone(0.03, 0.12, "#ffffff", { noTexture: true });
+        tooth.position.set(i * 0.08, 0.14, 0.3);
+        tooth.rotation.set(-0.3, 0, 0);
+        lowerJaw.add(tooth);
+      }
+      break;
+    }
+    case "chameleon": {
+      ["eye_r", "eye_l", "pupil_r", "pupil_l"].forEach(name => {
+        const obj = g.getObjectByName(name);
+        if (obj) g.remove(obj);
+      });
+      for (const s of [-1, 1] as const) {
+        const side = s === 1 ? "r" : "l";
+        const turret = cyl(0.18, 0.22, 0.36, c.fill);
+        turret.name = `turret_${side}`;
+        turret.position.set(s * 0.35, 0.18, 0.3);
+        turret.rotation.set(0, s * 0.8, 0);
+        g.add(turret);
+
+        const pupil = sphere(0.06, "#0e0e0e", { noTexture: true });
+        pupil.name = `chameleon_pupil_${side}`;
+        pupil.position.set(0, 0, 0.19);
+        turret.add(pupil);
       }
       break;
     }
@@ -1978,6 +2039,37 @@ export function mountCreature3D(
       const pupil = model.getObjectByName(`pupil${side}`);
       if (eye) eye.scale.y = eyeScaleY;
       if (pupil) pupil.scale.y = eyeScaleY;
+    }
+
+    // Secondary mesh animations
+    const hood = model.getObjectByName("hood");
+    if (hood) {
+      hood.scale.x = 1.5 + Math.sin(t * 8.0) * 0.15;
+    }
+
+    const mandibleR = model.getObjectByName("mandible_r");
+    const mandibleL = model.getObjectByName("mandible_l");
+    if (mandibleR && mandibleL) {
+      const pinch = Math.sin(t * 5.0) * 0.2;
+      mandibleR.rotation.z = 0.3 - pinch;
+      mandibleL.rotation.z = -0.3 + pinch;
+    }
+
+    const turretR = model.getObjectByName("turret_r");
+    const turretL = model.getObjectByName("turret_l");
+    if (turretR && turretL) {
+      turretR.rotation.y = 0.8 + Math.sin(t * 1.5) * 0.25;
+      turretR.rotation.x = Math.cos(t * 1.2) * 0.15;
+      turretL.rotation.y = -0.8 + Math.sin(t * 0.9) * 0.25;
+      turretL.rotation.x = Math.cos(t * 2.1) * 0.15;
+    }
+
+    const earR = model.getObjectByName("bat_ear_r");
+    const earL = model.getObjectByName("bat_ear_l");
+    if (earR && earL) {
+      const twitchVal = Math.sin(t * 30.0) * 0.15 * (Math.sin(t * 0.5) > 0.85 ? 1.0 : 0.0);
+      earR.rotation.z = -0.15 + twitchVal;
+      earL.rotation.z = 0.15 - twitchVal;
     }
 
     // Chain-link tail physics sway
