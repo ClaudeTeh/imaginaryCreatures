@@ -131,6 +131,7 @@ export function playBattle(
     actionDuration: number;
     dodgeDir: number;
     blinkTimer: number;
+    deathTimer: number;
     onHitCallback?: () => void;
   }
 
@@ -313,6 +314,7 @@ export function playBattle(
         actionDuration: 0,
         dodgeDir: 0,
         blinkTimer: 0,
+        deathTimer: 0,
       },
       b: {
         model: buildCreatureModel(sb.genome as unknown as Genome),
@@ -328,6 +330,7 @@ export function playBattle(
         actionDuration: 0,
         dodgeDir: 0,
         blinkTimer: 0,
+        deathTimer: 0,
       },
     };
 
@@ -839,8 +842,22 @@ export function playBattle(
             }
           }
         } else {
-          currentPos.y -= 1.0;
-          f.model.rotation.z = side === "a" ? -0.8 : 0.8;
+          f.deathTimer++;
+          const collapsePos = Math.min(1.0, f.deathTimer / 30);
+          currentPos.y = 0.1 - collapsePos * 0.7;
+          f.model.rotation.z = (side === "a" ? -0.8 : 0.8) * Math.min(1.0, f.deathTimer / 15);
+          
+          f.model.traverse((o) => {
+            const mesh = o as THREE.Mesh;
+            if (mesh.isMesh && mesh.material) {
+              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+              mats.forEach((mat) => {
+                mat.transparent = true;
+                mat.opacity = Math.max(0, 1.0 - (f.deathTimer - 15) / 35);
+              });
+            }
+          });
+
           const battleActive = cursor < ordered.length || frame <= durationFrames;
           if (battleActive && Math.random() < 0.1) {
             spawnBurst3D(f.model.position, "#555555", 3, 0.03);
@@ -855,7 +872,12 @@ export function playBattle(
           const sHeight = currentPos.y;
           const sScale = Math.max(0.2, 1.2 - sHeight * 0.8);
           f.shadow.scale.set(sScale, sScale, 1);
-          (f.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.1, 0.55 - sHeight * 0.65);
+          if (alive) {
+            (f.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.1, 0.55 - sHeight * 0.65);
+          } else {
+            (f.shadow.material as THREE.MeshBasicMaterial).transparent = true;
+            (f.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.55 - f.deathTimer / 30);
+          }
         }
 
         // Apply visual orientations based on combat strike state
