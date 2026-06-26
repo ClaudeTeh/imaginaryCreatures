@@ -244,6 +244,7 @@ export function playBattle(
   }
 
   const activeParticles3D: Particle3D[] = [];
+  const activeStatus: Record<Side, Set<string>> = { a: new Set(), b: new Set() };
 
   interface BiomeParticle {
     mesh: THREE.Points;
@@ -257,6 +258,8 @@ export function playBattle(
   const activeFloats3D: Float3D[] = [];
 
   let hudOverlay: HTMLElement | null = null;
+  let statusBarA: HTMLDivElement | null = null;
+  let statusBarB: HTMLDivElement | null = null;
   let speedLinesCanvas: HTMLCanvasElement | null = null;
 
   const starts = result.events.filter((e) => e.kind === "start") as Extract<
@@ -504,6 +507,13 @@ export function playBattle(
     `;
     canvas.parentElement?.style.setProperty("position", "relative");
     canvas.parentElement?.appendChild(hudOverlay);
+
+    statusBarA = document.createElement("div");
+    statusBarA.className = "status-bar status-bar-a";
+    statusBarB = document.createElement("div");
+    statusBarB.className = "status-bar status-bar-b";
+    hudOverlay.appendChild(statusBarA);
+    hudOverlay.appendChild(statusBarB);
 
     speedLinesCanvas = document.createElement("canvas");
     speedLinesCanvas.width = W;
@@ -1937,6 +1947,15 @@ export function playBattle(
     }
   }
 
+  function updateStatusBars() {
+    if (!hudOverlay) return;
+    for (const s of (["a", "b"] as Side[])) {
+      const bar = s === "a" ? statusBarA : statusBarB;
+      if (!bar) continue;
+      bar.innerHTML = [...activeStatus[s]].map(tag => `<span class="status-tag">${tag}</span>`).join("");
+    }
+  }
+
   function applyEvent(e: BattleEvent) {
     if (use3D && fighters3D) {
       // 3D event logic
@@ -1982,6 +2001,17 @@ export function playBattle(
           } else {
             executeAbilityVFX(e);
           }
+          // Track status effects for HUD
+          if (e.ability === "frenzy") {
+            activeStatus[e.by].add("⚡ Frenzy");
+          } else if (e.ability === "armor") {
+            activeStatus[e.by].add("🛡 Armor");
+          } else if (e.ability === "venom") {
+            activeStatus[other(e.by)].add("☠ Venom");
+          } else if (e.ability === "regenerate") {
+            activeStatus[e.by].add("💚 Regen");
+          }
+          updateStatusBars();
           break;
         }
         case "poison": {
@@ -2009,6 +2039,8 @@ export function playBattle(
           const f3D = fighters3D[e.side];
           f3D.flash = 1.0;
           sfxDeath();
+          activeStatus[e.side].clear();
+          updateStatusBars();
           break;
         }
       }

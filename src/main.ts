@@ -19,6 +19,43 @@ let state: GameState = load();
 let cancelArena: (() => void) | null = null;
 let newGameExpanded = false;
 
+const ACHIEVEMENT_LABELS: Record<string, string> = {
+  first_blood:    "🩸 First Victory — You won your first battle!",
+  streak_5:       "🔥 On Fire — 5-win streak!",
+  tier1_complete: "🧬 Tier 1 Complete — All starter species unlocked!",
+  ten_wins:       "⚔ Veteran — 10 battles won!",
+};
+
+function checkAchievements(): string[] {
+  const earned: string[] = [];
+  const tier1Ids = ANIMALS.filter(a => a.tier === 1).map(a => a.id);
+
+  if (state.wins === 1 && !state.achievements.includes("first_blood"))
+    earned.push("first_blood");
+  if (state.streak === 5 && !state.achievements.includes("streak_5"))
+    earned.push("streak_5");
+  if (tier1Ids.every(id => state.unlocked.includes(id)) && !state.achievements.includes("tier1_complete"))
+    earned.push("tier1_complete");
+  if (state.wins === 10 && !state.achievements.includes("ten_wins"))
+    earned.push("ten_wins");
+
+  return earned;
+}
+
+function showAchievementToast(id: string): void {
+  const label = ACHIEVEMENT_LABELS[id] ?? id;
+  const toast = el("div", { class: "achievement-toast" }, [
+    el("div", { class: "achievement-icon" }, ["🏆"]),
+    el("div", { class: "achievement-text" }, [label]),
+  ]);
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add("achievement-show"), 50);
+  setTimeout(() => {
+    toast.classList.remove("achievement-show");
+    setTimeout(() => toast.remove(), 400);
+  }, 3500);
+}
+
 // Persistent 3D Lab preview. Created lazily once (a single WebGL context that we
 // reuse across re-renders via setGenome) so we never leak GL contexts. Falls back
 // silently to the 2D card if WebGL is unavailable or three fails to load.
@@ -439,6 +476,23 @@ function renderBestiary(): void {
     ]);
   });
 
+  const achievementDefs = [
+    { id: "first_blood",    label: "🩸 First Victory" },
+    { id: "streak_5",       label: "🔥 On Fire (5-streak)" },
+    { id: "tier1_complete", label: "🧬 Tier 1 Complete" },
+    { id: "ten_wins",       label: "⚔ Veteran (10 wins)" },
+  ];
+  const achSection = el("div", { style: "margin-top:20px;" }, [
+    el("h3", { style: "color:#c8a84b;font-size:14px;margin:0 0 8px;" }, ["🏆 Achievements"]),
+    el("div", { style: "display:flex;gap:8px;flex-wrap:wrap;" },
+      achievementDefs.map(({ id, label }) =>
+        el("span", {
+          class: state.achievements.includes(id) ? "achievement-badge earned" : "achievement-badge",
+        }, [label])
+      )
+    ),
+  ]);
+
   app.append(
     el("div", { class: "bestiary-screen" }, [
       el("div", { style: "display:flex;align-items:center;gap:12px;margin-bottom:8px;" }, [
@@ -447,6 +501,7 @@ function renderBestiary(): void {
         el("span", { style: "color:#556677;font-size:13px;" }, [`${state.unlocked.length}/${ANIMALS.length} species unlocked`]),
       ]),
       el("div", { class: "bestiary-grid" }, cards),
+      achSection,
     ]),
   );
 }
@@ -671,6 +726,15 @@ function showResult(area: HTMLElement, winner: Side | "draw", opponentName: stri
   }
   state.seed = (state.seed * 1664525 + 1013904223) >>> 0;
   save(state);
+
+  const newAchievements = checkAchievements();
+  if (newAchievements.length > 0) {
+    state.achievements.push(...newAchievements);
+    save(state);
+    newAchievements.forEach((id, i) => {
+      setTimeout(() => showAchievementToast(id), i * 1200);
+    });
+  }
 
   const banner = playerWon
     ? el("div", { class: "result-banner win" }, ["VICTORY"])

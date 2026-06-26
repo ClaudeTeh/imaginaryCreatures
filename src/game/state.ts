@@ -20,6 +20,7 @@ export interface GameState {
   roster: SavedCreature[];
   battleSpeed: BattleSpeed;
   showOpponent: boolean;
+  achievements: string[];
 }
 
 /** Animals available at the start; the rest unlock by winning. */
@@ -49,6 +50,7 @@ export function newGame(startTier: 1 | 2 | 3 = 1, currentState?: Partial<GameSta
     roster: [],
     battleSpeed: currentState?.battleSpeed ?? "normal",
     showOpponent: currentState?.showOpponent ?? true,
+    achievements: [],
   };
 }
 
@@ -73,6 +75,7 @@ export function load(): GameState {
         ? (data.battleSpeed as BattleSpeed)
         : "normal",
       showOpponent: data.showOpponent ?? true,
+      achievements: data.achievements ?? [],
     };
   } catch {
     return newGame();
