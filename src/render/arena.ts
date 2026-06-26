@@ -179,6 +179,7 @@ export function playBattle(
   let platMat: THREE.MeshStandardMaterial | null = null;
   let ringGeo: THREE.TorusGeometry | null = null;
   let ringMat: THREE.MeshStandardMaterial | null = null;
+  let floorRings: THREE.Mesh[] = [];
   let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
   let slowMoTimer = 0;
   let victoryTimer = 0;
@@ -413,6 +414,28 @@ export function playBattle(
     ring.position.y = 0.01;
     arenaGroup.add(ring);
     scene3D.add(arenaGroup);
+
+    // Biome floor rings — decorative concentric glowing rings on the platform
+    floorRings = [];
+    const ringColors = [biome.ambientHex, biome.fogHex];
+    for (let i = 0; i < 2; i++) {
+      const innerR = 1.5 + i * 1.8;
+      const outerR = innerR + 0.18;
+      const fRingGeo = new THREE.RingGeometry(innerR, outerR, 64);
+      const fRingMat = new THREE.MeshBasicMaterial({
+        color: ringColors[i],
+        transparent: true,
+        opacity: 0.35 - i * 0.1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const fRing = new THREE.Mesh(fRingGeo, fRingMat);
+      fRing.rotation.x = -Math.PI / 2;
+      fRing.position.y = 0.02;
+      scene3D.add(fRing);
+      floorRings.push(fRing);
+    }
+
     spawnBiomeParticles(scene3D, biome);
 
     const biomeName =
@@ -2413,6 +2436,12 @@ export function playBattle(
         biomeParticleSystem.mesh.geometry.dispose();
         (biomeParticleSystem.mesh.material as THREE.Material).dispose();
       }
+      floorRings.forEach(r => {
+        r.geometry.dispose();
+        (r.material as THREE.Material).dispose();
+        scene3D?.remove(r);
+      });
+      floorRings = [];
       renderer3D?.dispose();
     }
   };

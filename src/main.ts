@@ -14,6 +14,7 @@ import { playBattle } from "./render/arena";
 import type { Creature3DHandle } from "./render/creature3d";
 import { initAudio, setMuted, sfxLose, sfxWin, toggleMuted } from "./render/sound";
 import { BODY_TYPE } from "./combat/typeChart";
+import { ABILITIES } from "./data/abilities";
 
 let state: GameState = load();
 let cancelArena: (() => void) | null = null;
@@ -400,7 +401,11 @@ function buildTooltip(a: Animal, slot: Slot): HTMLElement {
     lines.push(el("hr", { class: "tip-divider" }) as HTMLElement);
   }
   if (part.ability) {
-    lines.push(el("div", { class: "tip-ability" }, [`🌀 ${part.ability}`]) as HTMLElement);
+    const abilityDef = ABILITIES[part.ability];
+    lines.push(el("div", { class: "tip-ability" }, [`🌀 ${abilityDef?.name ?? part.ability}`]) as HTMLElement);
+    if (abilityDef?.description) {
+      lines.push(el("div", { class: "tip-ability-desc" }, [abilityDef.description]) as HTMLElement);
+    }
   }
   if (part.trait) {
     lines.push(el("div", { class: "tip-trait" }, [`✦ ${part.trait}`]) as HTMLElement);
@@ -455,7 +460,7 @@ function renderBestiary(): void {
     for (const part of Object.values(parts)) {
       if (part.ability) abilitySet.add(part.ability);
     }
-    const abilities = [...abilitySet].join(", ");
+    const abilityList = [...abilitySet];
 
     const bodyType = BODY_TYPE[animal.id];
     const typeEmojis: Record<string, string> = {
@@ -472,7 +477,15 @@ function renderBestiary(): void {
         el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalDef / maxDef * 24)}px;background:#3070c8;`, title: `Defense: ${totalDef}` }, []),
         el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalHp  / maxHp  * 32)}px;background:#30a850;`, title: `Health: ${totalHp}` }, []),
       ]),
-      ...(abilities ? [el("div", { class: "bestiary-abilities" }, [abilities])] : []),
+      ...(abilityList.length > 0 ? [el("div", { class: "bestiary-abilities" }, [
+        ...abilityList.map(id => {
+          const def = ABILITIES[id as keyof typeof ABILITIES];
+          return el("span", {
+            class: "ability-tag",
+            title: def ? `${def.name}: ${def.description}` : id,
+          }, [def?.name ?? id]) as HTMLElement;
+        }),
+      ])] : []),
     ]);
   });
 

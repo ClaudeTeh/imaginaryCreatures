@@ -600,6 +600,14 @@ canvas#arena {
   line-height: 1.6;
 }
 
+.tip-ability-desc {
+  color: #8ab8a0;
+  font-size: 9px;
+  line-height: 1.4;
+  font-style: italic;
+  margin-top: 1px;
+}
+
 .tip-trait {
   color: var(--gold);
   font-size: 10px;
@@ -678,7 +686,22 @@ canvas#arena {
 .bestiary-card-tier { font-size: 11px; color: #556677; }
 .bestiary-stat-bar-row { display: flex; gap: 4px; margin-top: 6px; justify-content: center; }
 .bestiary-stat-bar { height: 4px; border-radius: 2px; }
-.bestiary-abilities { font-size: 10px; color: #4a8f6a; margin-top: 4px; }
+.bestiary-abilities { font-size: 10px; color: #4a8f6a; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+
+.ability-tag {
+  display: inline-block;
+  background: rgba(74, 143, 106, 0.2);
+  border: 1px solid rgba(74, 143, 106, 0.5);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 9px;
+  color: #4a8f6a;
+  cursor: default;
+}
+
+.ability-tag:hover {
+  background: rgba(74, 143, 106, 0.35);
+}
 
 /* Tutorial overlay */
 .tutorial-overlay {
