@@ -175,6 +175,7 @@ export function playBattle(
   let camera3D: THREE.PerspectiveCamera | null = null;
   let fighters3D: Record<Side, Fighter3D> | null = null;
   let arenaGroup: THREE.Group | null = null;
+  let sceneryGroup: THREE.Group | null = null;
   let platform: THREE.Mesh | null = null;
   let platMat: THREE.MeshStandardMaterial | null = null;
   let ringGeo: THREE.TorusGeometry | null = null;
@@ -338,6 +339,184 @@ export function playBattle(
     biomeParticleSystem = { mesh: points, velocities, count: COUNT };
   };
 
+  const spawnSceneryProps = (scene: THREE.Scene, biomeName: string): THREE.Group => {
+    const group = new THREE.Group();
+    group.name = "scenery";
+
+    const createMaterial = (color: number, opts: THREE.MeshStandardMaterialParameters = {}) => {
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.8,
+        metalness: 0.1,
+        ...opts,
+      });
+    };
+
+    if (biomeName === "forest") {
+      const trunkMat = createMaterial(0x5c3820, { roughness: 0.9 });
+      const leafMat = createMaterial(0x1e3f20, { roughness: 0.9 });
+      
+      for (let i = 0; i < 7; i++) {
+        const angle = (i / 7) * Math.PI * 2 + Math.random() * 0.4;
+        const dist = 12 + Math.random() * 3;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        const scale = 0.8 + Math.random() * 0.5;
+
+        const tree = new THREE.Group();
+        tree.name = `tree_${i}`;
+        tree.position.set(x, 0, z);
+
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.22 * scale, 2.0 * scale, 8), trunkMat);
+        trunk.position.y = 1.0 * scale;
+        trunk.castShadow = true;
+        tree.add(trunk);
+
+        for (let j = 0; j < 3; j++) {
+          const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.7 * scale - j * 0.1, 1.2 * scale, 8), leafMat);
+          leaf.position.y = (1.5 + j * 0.8) * scale;
+          leaf.castShadow = true;
+          tree.add(leaf);
+        }
+        group.add(tree);
+      }
+    } 
+    else if (biomeName === "sky") {
+      const cloudMat = createMaterial(0xeeeeee, { roughness: 0.9, metalness: 0.0 });
+      for (let i = 0; i < 5; i++) {
+        const x = -15 + i * 8 + (Math.random() - 0.5) * 4;
+        const y = 5 + Math.random() * 3;
+        const z = -12 + (Math.random() - 0.5) * 4;
+
+        const cloud = new THREE.Group();
+        cloud.name = `cloud_${i}`;
+        cloud.position.set(x, y, z);
+
+        const sphereCount = 4 + Math.floor(Math.random() * 3);
+        for (let s = 0; s < sphereCount; s++) {
+          const r = 0.6 + Math.random() * 0.8;
+          const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 12), cloudMat);
+          m.position.set(
+            (s - sphereCount / 2) * 0.6 + (Math.random() - 0.5) * 0.2,
+            (Math.random() - 0.3) * 0.4,
+            (Math.random() - 0.5) * 0.4
+          );
+          cloud.add(m);
+        }
+        cloud.userData = { speed: 0.01 + Math.random() * 0.015 };
+        group.add(cloud);
+      }
+    } 
+    else if (biomeName === "ocean") {
+      const seaweedMat = createMaterial(0x107a60, { roughness: 0.6 });
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+        const dist = 11 + Math.random() * 2.5;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        const height = 3.5 + Math.random() * 2.0;
+
+        const seaweed = new THREE.Group();
+        seaweed.name = `kelp_${i}`;
+        seaweed.position.set(x, 0, z);
+
+        let parent: THREE.Object3D = seaweed;
+        const segCount = 5;
+        for (let s = 0; s < segCount; s++) {
+          const segGroup = new THREE.Group();
+          segGroup.name = `seg_${s}`;
+          segGroup.position.set(0, s === 0 ? 0 : height / segCount, 0);
+          
+          const leaf = new THREE.Mesh(new THREE.CylinderGeometry(0.12 - s * 0.015, 0.15 - s * 0.015, height / segCount, 8), seaweedMat);
+          leaf.position.y = (height / segCount) / 2;
+          leaf.castShadow = true;
+          segGroup.add(leaf);
+
+          parent.add(segGroup);
+          parent = segGroup;
+        }
+        group.add(seaweed);
+      }
+    } 
+    else if (biomeName === "volcano") {
+      const basaltMat = createMaterial(0x1c1c24, { roughness: 0.9, metalness: 0.2 });
+      const lavaCrackMat = new THREE.MeshStandardMaterial({
+        color: 0xff3b00,
+        emissive: 0xff3b00,
+        emissiveIntensity: 2.0,
+      });
+
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+        const dist = 11.5 + Math.random() * 2.5;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        const height = 4.0 + Math.random() * 3.0;
+
+        const column = new THREE.Group();
+        column.name = `basalt_${i}`;
+        column.position.set(x, 0, z);
+
+        const colMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, height, 6), basaltMat);
+        colMesh.position.y = height / 2;
+        colMesh.castShadow = true;
+        colMesh.receiveShadow = true;
+        column.add(colMesh);
+
+        const bandCount = 1 + Math.floor(Math.random() * 2);
+        for (let b = 0; b < bandCount; b++) {
+          const band = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.66, 0.08, 6, 1, true), lavaCrackMat);
+          band.position.y = height * (0.25 + b * 0.4);
+          column.add(band);
+        }
+        column.userData = { lavaCrackMat };
+        group.add(column);
+      }
+    } 
+    else {
+      const rockMat = createMaterial(0xa07040, { roughness: 0.9 });
+      const cactusMat = createMaterial(0x2a5220, { roughness: 0.8 });
+
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+        const dist = 12 + Math.random() * 3;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+
+        if (i % 2 === 0) {
+          const spire = new THREE.Mesh(new THREE.ConeGeometry(0.8 + Math.random() * 0.4, 3.0 + Math.random() * 2.0, 5), rockMat);
+          spire.position.set(x, 1.5, z);
+          spire.castShadow = true;
+          spire.receiveShadow = true;
+          group.add(spire);
+        } else {
+          const cactus = new THREE.Group();
+          cactus.position.set(x, 0, z);
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.5, 8), cactusMat);
+          stem.position.y = 1.25;
+          stem.castShadow = true;
+          cactus.add(stem);
+
+          for (const s of [-1, 1] as const) {
+            const armGroup = new THREE.Group();
+            armGroup.position.set(s * 0.22, 1.2 + Math.random() * 0.4, 0);
+            const branchOut = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.4, 8), cactusMat);
+            branchOut.rotation.z = Math.PI / 2;
+            armGroup.add(branchOut);
+            const branchUp = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.8, 8), cactusMat);
+            branchUp.position.set(s * 0.2, 0.3, 0);
+            armGroup.add(branchUp);
+            cactus.add(armGroup);
+          }
+          group.add(cactus);
+        }
+      }
+    }
+
+    scene.add(group);
+    return group;
+  };
+
   try {
     renderer3D = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer3D.setSize(W, H);
@@ -446,6 +625,8 @@ export function playBattle(
       biome.particleKind === "ember"   ? "volcano" : "desert";
     stopMusic = startBattleMusic(biomeName);
     stopAmbient = startBiomeAmbient(biomeName);
+
+    sceneryGroup = spawnSceneryProps(scene3D, biomeName);
 
     // Build 3D models from genomes
     const shadowA = createSoftShadowMesh();
@@ -569,6 +750,7 @@ export function playBattle(
 
   function step() {
     frame++;
+    const t = frame * 0.016;
 
     let timeScale = 1.0;
     if (use3D && slowMoTimer > 0) {
@@ -697,6 +879,15 @@ export function playBattle(
           const sx = (Math.random() - 0.5) * camShake;
           const sy = (Math.random() - 0.5) * camShake * 0.5;
           camera3D.position.add(new THREE.Vector3(sx, sy, 0));
+          if (sceneryGroup) {
+            const shx = (Math.random() - 0.5) * camShake * 0.15;
+            const shy = (Math.random() - 0.5) * camShake * 0.1;
+            sceneryGroup.position.set(shx, shy, 0);
+          }
+        } else {
+          if (sceneryGroup) {
+            sceneryGroup.position.set(0, 0, 0);
+          }
         }
       }
 
@@ -795,6 +986,51 @@ export function playBattle(
           if (Math.abs(pos[i * 3 + 2]) > 11) pos[i * 3 + 2] *= -0.9;
         }
         posAttr.needsUpdate = true;
+      }
+
+      // Animate scenery props
+      if (sceneryGroup) {
+        sceneryGroup.children.forEach(child => {
+          if (child.name.startsWith("tree_")) {
+            const idx = parseInt(child.name.split("_")[1]) || 0;
+            child.rotation.z = Math.sin(t * 1.5 + idx) * 0.02;
+            child.rotation.x = Math.cos(t * 1.2 + idx) * 0.02;
+          } 
+          else if (child.name.startsWith("cloud_")) {
+            const speed = child.userData.speed || 0.015;
+            child.position.x += speed * timeScale;
+            if (child.position.x > 18) {
+              child.position.x = -18;
+            }
+          } 
+          else if (child.name.startsWith("kelp_")) {
+            let parent: THREE.Object3D = child;
+            for (let s = 0; s < 5; s++) {
+              const seg = parent.getObjectByName(`seg_${s}`);
+              if (seg) {
+                seg.rotation.z = Math.sin(t * 2.0 - s * 0.3) * 0.06;
+                seg.rotation.x = Math.cos(t * 1.6 - s * 0.3) * 0.04;
+              }
+            }
+          } 
+          else if (child.name.startsWith("basalt_")) {
+            if (child.userData.lavaCrackMat) {
+              child.userData.lavaCrackMat.emissiveIntensity = 1.5 + Math.sin(t * 3.0) * 0.8;
+            }
+          }
+        });
+      }
+
+      // Volumetric searchlights sway & pedestal pulse
+      for (let i = 0; i < 3; i++) {
+        const ray = scene3D.getObjectByName(`light_ray_${i}`);
+        if (ray instanceof THREE.Mesh) {
+          ray.rotation.z = Math.sin(t * 0.6 + i) * 0.12;
+          ray.rotation.x = Math.cos(t * 0.5 + i) * 0.12;
+        }
+      }
+      if (ringMat) {
+        ringMat.emissiveIntensity = 1.2 + Math.sin(t * 2.0) * 0.3;
       }
 
       // Update active 3D beams
@@ -2463,6 +2699,10 @@ export function playBattle(
         disposeModel(fighters3D.b.model);
         scene3D.remove(fighters3D.b.shadow);
         disposeModel(fighters3D.b.shadow);
+      }
+      if (sceneryGroup && scene3D) {
+        scene3D.remove(sceneryGroup);
+        disposeModel(sceneryGroup);
       }
       if (arenaGroup && scene3D) {
         scene3D.remove(arenaGroup);

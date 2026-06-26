@@ -150,7 +150,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     case "dragon": {
       ctx.fillStyle = baseHex;
       ctx.fillRect(0, 0, 256, 256);
-      // Overlapping scale pattern — diamond-grid
       ctx.fillStyle = accentHex;
       for (let row = 0; row < 12; row++) {
         const offset = (row % 2) * 22;
@@ -173,7 +172,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     case "jellyfish": {
       ctx.fillStyle = baseHex;
       ctx.fillRect(0, 0, 256, 256);
-      // Bioluminescent radial pulse rings
       for (let ring = 0; ring < 6; ring++) {
         const r = 20 + ring * 36;
         const grad = ctx.createRadialGradient(128, 128, r - 12, 128, 128, r);
@@ -182,6 +180,197 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
         grad.addColorStop(1, accentHex + "00");
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 256, 256);
+      }
+      break;
+    }
+    case "crab": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 2.5;
+      const size = 24;
+      const h = size * Math.sqrt(3);
+      for (let row = -1; row < 256 / h + 2; row++) {
+        const offset = (row % 2) * (size * 1.5);
+        for (let col = -1; col < 256 / (size * 3) + 2; col++) {
+          const cx = col * (size * 3) + offset;
+          const cy = row * (h / 2);
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const x = cx + Math.cos(angle) * size;
+            const y = cy + Math.sin(angle) * size;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case "gecko":
+    case "chameleon": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      const spacing = 10;
+      for (let y = 0; y < 256; y += spacing) {
+        const offset = (Math.floor(y / spacing) % 2) * (spacing / 2);
+        for (let x = -spacing; x < 256 + spacing; x += spacing) {
+          ctx.beginPath();
+          ctx.arc(x + offset + (Math.random() - 0.5) * 1.5, y + (Math.random() - 0.5) * 1.5, 3 + Math.random() * 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    case "mantis": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        const xOffset = 32 + i * 64;
+        ctx.beginPath();
+        ctx.moveTo(xOffset, 0);
+        ctx.lineTo(xOffset, 256);
+        ctx.stroke();
+        for (let y = 16; y < 256; y += 32) {
+          ctx.beginPath();
+          ctx.moveTo(xOffset, y);
+          ctx.lineTo(xOffset - 24, y + 16);
+          ctx.moveTo(xOffset, y);
+          ctx.lineTo(xOffset + 24, y + 16);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case "panther": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      for (let i = 0; i < 28; i++) {
+        const cx = Math.random() * 256;
+        const cy = Math.random() * 256;
+        const r = 8 + Math.random() * 6;
+        const spots = 4 + Math.floor(Math.random() * 2);
+        for (let s = 0; s < spots; s++) {
+          const angle = (s / spots) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+          const sx = cx + Math.cos(angle) * r;
+          const sy = cy + Math.sin(angle) * r;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3.5 + Math.random() * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    case "octopus": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 24; i++) {
+        const cx = Math.random() * 256;
+        const cy = Math.random() * 256;
+        const r = 6 + Math.random() * 6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      break;
+    }
+    case "bat": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 1.8;
+      for (let i = 0; i < 8; i++) {
+        const r = 16 + i * 36;
+        ctx.beginPath();
+        ctx.arc(-20, -20, r, 0, Math.PI / 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(276, 276, r, Math.PI, Math.PI * 1.5);
+        ctx.stroke();
+      }
+      break;
+    }
+    case "ox": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 1.0;
+      const spacing = 16;
+      for (let i = 0; i < 256; i += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 256);
+        ctx.moveTo(0, i);
+        ctx.lineTo(256, i);
+        ctx.stroke();
+      }
+      ctx.fillStyle = accentHex;
+      for (let y = spacing / 2; y < 256; y += spacing) {
+        for (let x = spacing / 2; x < 256; x += spacing) {
+          ctx.beginPath();
+          ctx.arc(x + (Math.random() - 0.5) * 3, y + (Math.random() - 0.5) * 3, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    case "shark": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      for (let i = 0; i < 400; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        ctx.fillRect(x, y, 3 + Math.random() * 4, 1.0);
+      }
+      break;
+    }
+    case "phoenix": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = accentHex;
+      for (let i = 0; i < 30; i++) {
+        const cx = Math.random() * 256;
+        const cy = Math.random() * 256;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 8);
+        ctx.quadraticCurveTo(cx - 5, cy + 2, cx, cy + 6);
+        ctx.quadraticCurveTo(cx + 5, cy + 2, cx, cy - 8);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffeedd";
+      for (let i = 0; i < 150; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        ctx.fillRect(x, y, 1.5, 1.5);
+      }
+      break;
+    }
+    case "gorilla": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = accentHex;
+      ctx.lineWidth = 1.8;
+      for (let i = 0; i < 400; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const len = 6 + Math.random() * 9;
+        const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.15;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+        ctx.stroke();
       }
       break;
     }
@@ -764,6 +953,187 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     return g;
   }
 
+  if (front && animalId === "phoenix") {
+    for (const s of [-1, 1] as const) {
+      const wingGroup = new THREE.Group();
+      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
+      
+      const wingGeo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        0, 0, 0,
+        s * 2.4, 1.3, -0.4,
+        s * 1.9, -0.1, -1.2,
+        s * 0.9, -0.3, -0.8,
+      ]);
+      const indices = [0, 1, 2, 0, 2, 3];
+      wingGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+      wingGeo.setIndex(indices);
+      wingGeo.computeVertexNormals();
+      const wingMesh = new THREE.Mesh(wingGeo, mat(c.fill, { emissive: c.accent, emissiveI: 0.9 }));
+      wingMesh.material.side = THREE.DoubleSide;
+      wingMesh.castShadow = true;
+      wingGroup.add(wingMesh);
+      applyToonOutline(wingMesh);
+
+      for (let f = 0; f < 4; f++) {
+        const plume = cone(0.12, 1.1 - f * 0.15, "#ffbb33", { emissive: "#ff5500", emissiveI: 1.5, noTexture: true });
+        plume.position.set(s * (0.8 + f * 0.35), 0.3 - f * 0.1, -0.4 - f * 0.15);
+        plume.rotation.set(0.2, 0, -s * (0.8 + f * 0.1));
+        wingGroup.add(plume);
+      }
+      wingGroup.position.set(s * 0.65, 0.2, -0.15);
+      g.add(wingGroup);
+    }
+    return g;
+  }
+
+  if (front && animalId === "bat") {
+    for (const s of [-1, 1] as const) {
+      const wingGroup = new THREE.Group();
+      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
+
+      const upperArm = cyl(0.08, 0.08, 1.0, c.shade, { rough: 0.4 });
+      upperArm.position.set(s * 0.35, 0.3, -0.1);
+      upperArm.rotation.set(0.2, 0, -s * 0.8);
+      wingGroup.add(upperArm);
+
+      const foreArm = cyl(0.06, 0.06, 1.2, c.shade, { rough: 0.4 });
+      foreArm.position.set(s * 0.95, 0.7, -0.2);
+      foreArm.rotation.set(-0.2, 0, s * 0.3);
+      wingGroup.add(foreArm);
+
+      const membraneGeo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        s * 0.65, 0.2, -0.15,
+        s * 2.2, 1.1, -0.4,
+        s * 1.9, -0.6, -1.1,
+        s * 1.3, -0.9, -0.9,
+        s * 0.7, -0.7, -0.6,
+      ]);
+      const indices = [
+        0, 1, 2,
+        0, 2, 3,
+        0, 3, 4
+      ];
+      membraneGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+      membraneGeo.setIndex(indices);
+      membraneGeo.computeVertexNormals();
+      const membraneMesh = new THREE.Mesh(membraneGeo, mat(c.fill, { rough: 0.8 }));
+      membraneMesh.material.side = THREE.DoubleSide;
+      membraneMesh.castShadow = true;
+      wingGroup.add(membraneMesh);
+      applyToonOutline(membraneMesh);
+
+      for (let f = 0; f < 3; f++) {
+        const strut = cyl(0.02, 0.02, 1.2, c.shade, { noTexture: true });
+        strut.position.set(s * 1.45 - s * f * 0.3, 0.1 - f * 0.1, -0.6 + f * 0.1);
+        strut.rotation.set(0.3, 0, -s * (0.5 + f * 0.3));
+        wingGroup.add(strut);
+      }
+
+      wingGroup.position.set(0, 0, 0);
+      g.add(wingGroup);
+    }
+    return g;
+  }
+
+  if (front && animalId === "dragon") {
+    for (const s of [-1, 1] as const) {
+      const wingGroup = new THREE.Group();
+      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
+      
+      const strut1 = cyl(0.1, 0.08, 1.3, c.shade);
+      strut1.position.set(s * 0.5, 0.4, -0.2);
+      strut1.rotation.set(0.1, 0, -s * 0.9);
+      wingGroup.add(strut1);
+
+      const strut2 = cyl(0.07, 0.05, 1.5, c.shade);
+      strut2.position.set(s * 1.2, 0.9, -0.4);
+      strut2.rotation.set(-0.15, 0, s * 0.4);
+      wingGroup.add(strut2);
+
+      const wingGeo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        0, 0, 0,
+        s * 2.3, 1.3, -0.5,
+        s * 2.0, -0.4, -1.3,
+        s * 1.2, -0.8, -1.0,
+        s * 0.6, -0.5, -0.6,
+      ]);
+      const indices = [
+        0, 1, 2,
+        0, 2, 3,
+        0, 3, 4
+      ];
+      wingGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+      wingGeo.setIndex(indices);
+      wingGeo.computeVertexNormals();
+      const wingMesh = new THREE.Mesh(wingGeo, mat(c.fill, { rough: 0.7 }));
+      wingMesh.material.side = THREE.DoubleSide;
+      wingMesh.castShadow = true;
+      wingGroup.add(wingMesh);
+      applyToonOutline(wingMesh);
+
+      const claw = cone(0.06, 0.28, c.accent, { noTexture: true });
+      claw.position.set(s * 1.8, 1.3, -0.4);
+      claw.rotation.set(0.4, 0, -s * 0.5);
+      wingGroup.add(claw);
+
+      wingGroup.position.set(s * 0.65, 0.2, -0.15);
+      g.add(wingGroup);
+    }
+    return g;
+  }
+
+  if (front && animalId === "mantis") {
+    for (const s of [-1, 1] as const) {
+      const limbGroup = new THREE.Group();
+      limbGroup.name = `mantis_scythe_${s === 1 ? "r" : "l"}`;
+      
+      const arm = cyl(0.09, 0.08, 0.75, c.fill, { rough: 0.3 });
+      arm.position.set(s * 0.58, -0.15, z);
+      arm.rotation.set(0.2, 0, s * 0.3);
+      arm.castShadow = true;
+      limbGroup.add(arm);
+
+      const knee = sphere(0.12, c.shade, { rough: 0.3 });
+      knee.position.set(s * 0.66, -0.48, z + 0.1);
+      limbGroup.add(knee);
+
+      const tibia = cyl(0.07, 0.04, 0.85, c.fill, { rough: 0.3 });
+      tibia.position.set(s * 0.72, -0.85, z + 0.32);
+      tibia.rotation.set(0.9, 0, -s * 0.15);
+      tibia.castShadow = true;
+      limbGroup.add(tibia);
+
+      const bladeGeo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        s * 0.72, -0.85, z + 0.32,
+        s * 0.92, -1.3, z + 0.65,
+        s * 0.8, -1.0, z + 0.45,
+      ]);
+      const indices = [0, 1, 2];
+      bladeGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+      bladeGeo.setIndex(indices);
+      bladeGeo.computeVertexNormals();
+      const bladeMesh = new THREE.Mesh(bladeGeo, mat(c.accent, { rough: 0.1, metal: 0.5, noTexture: true }));
+      bladeMesh.material.side = THREE.DoubleSide;
+      bladeMesh.castShadow = true;
+      limbGroup.add(bladeMesh);
+      applyToonOutline(bladeMesh);
+
+      for (let sp = 0; sp < 4; sp++) {
+        const spike = cone(0.03, 0.12, c.accent, { noTexture: true });
+        spike.position.set(s * (0.7 + sp * 0.02), -0.7 - sp * 0.1, z + 0.2 + sp * 0.08);
+        spike.rotation.set(0.6, 0, -s * 0.5);
+        limbGroup.add(spike);
+      }
+
+      g.add(limbGroup);
+    }
+    return g;
+  }
+
   // Crab pincers
   if (front && animalId === "crab") {
     for (const s of [-1, 1] as const) {
@@ -1018,6 +1388,91 @@ function buildTail(animalId: string): THREE.Group {
     return root;
   }
 
+  // Chameleon curly tail
+  if (animalId === "chameleon") {
+    let parent: THREE.Object3D = root;
+    const segments = 10;
+    for (let i = 0; i < segments; i++) {
+      const t = i / (segments - 1);
+      const segGroup = new THREE.Group();
+      segGroup.name = `tail_seg_${i}`;
+      if (i === 0) {
+        segGroup.position.set(0, 0.1, -0.9);
+      } else {
+        segGroup.position.set(0, -0.16, -0.22 + t * 0.05);
+        segGroup.rotation.x = -0.45;
+      }
+      const mesh = sphere(0.24 * (1 - t * 0.72), c.fill);
+      mesh.castShadow = true;
+      segGroup.add(mesh);
+      parent.add(segGroup);
+      parent = segGroup;
+    }
+    return root;
+  }
+
+  // Shark tail: vertical caudal fin
+  if (animalId === "shark") {
+    let parent: THREE.Object3D = root;
+    const segments = 6;
+    for (let i = 0; i < segments; i++) {
+      const t = i / (segments - 1);
+      const segGroup = new THREE.Group();
+      segGroup.name = `tail_seg_${i}`;
+      if (i === 0) {
+        segGroup.position.set(0, 0.1, -0.9);
+      } else {
+        segGroup.position.set(0, 0.05, -0.24);
+      }
+      const mesh = sphere(0.24 * (1 - t * 0.6), c.fill);
+      mesh.castShadow = true;
+      segGroup.add(mesh);
+      if (i === segments - 1) {
+        const upperLobe = cone(0.08, 0.65, c.accent, { noTexture: true });
+        upperLobe.position.set(0, 0.28, -0.15);
+        upperLobe.rotation.x = -0.6;
+        segGroup.add(upperLobe);
+        const lowerLobe = cone(0.06, 0.42, c.accent, { noTexture: true });
+        lowerLobe.position.set(0, -0.2, -0.1);
+        lowerLobe.rotation.x = 0.6;
+        segGroup.add(lowerLobe);
+      }
+      parent.add(segGroup);
+      parent = segGroup;
+    }
+    return root;
+  }
+
+  // Phoenix tail: 3 long trail feathers
+  if (animalId === "phoenix") {
+    for (const offset of [-1, 0, 1] as const) {
+      const featherRoot = new THREE.Group();
+      featherRoot.name = `tail_feather_${offset + 1}`;
+      featherRoot.position.set(offset * 0.18, 0.1, -0.9);
+      featherRoot.rotation.set(-0.2, offset * 0.15, 0);
+      let parent: THREE.Object3D = featherRoot;
+      const segments = 7;
+      for (let i = 0; i < segments; i++) {
+        const t = i / (segments - 1);
+        const segGroup = new THREE.Group();
+        segGroup.name = `tail_seg_${offset + 1}_${i}`;
+        if (i === 0) {
+          segGroup.position.set(0, 0, 0);
+        } else {
+          segGroup.position.set(0, -0.25 / segments, -1.5 / segments);
+        }
+        const mesh = sphere(0.16 * (1 - t * 0.5), c.fill, { emissive: c.accent, emissiveI: 0.5 });
+        mesh.scale.set(1.0, 0.12, 1.4);
+        mesh.castShadow = true;
+        segGroup.add(mesh);
+        parent.add(segGroup);
+        parent = segGroup;
+      }
+      root.add(featherRoot);
+    }
+    return root;
+  }
+
   // Standard bone chain tail
   let parent: THREE.Object3D = root;
   const segments = animalId === "scorpion" ? 8 : (animalId === "cobra" ? 8 : (animalId === "tiger" ? 8 : 6));
@@ -1076,6 +1531,11 @@ function buildTail(animalId: string): THREE.Group {
         fin.rotation.x = -1.4;
         fin.position.set(0, 0.1, -0.4);
         segGroup.add(fin);
+      } else if (animalId === "dragon") {
+        const spade = cone(0.18, 0.45, c.accent, { rough: 0.3, noTexture: true });
+        spade.rotation.x = -Math.PI / 2;
+        spade.position.set(0, 0.05, -0.32);
+        segGroup.add(spade);
       }
     }
     
@@ -1523,10 +1983,16 @@ export function mountCreature3D(
     // Chain-link tail physics sway
     const tailSwaySpeed = isSerpentine ? 4.5 : (isHeavyMammal ? 2.0 : 3.2);
     const tailSwayAmp = isSerpentine ? 0.32 : (isHeavyMammal ? 0.08 : 0.15);
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 10; i++) {
       const seg = model.getObjectByName(`tail_seg_${i}`);
       if (seg) {
         seg.rotation.y = Math.sin(t * tailSwaySpeed - i * 0.32) * tailSwayAmp;
+      }
+      for (const off of [0, 1, 2]) {
+        const segFeather = model.getObjectByName(`tail_seg_${off}_${i}`);
+        if (segFeather) {
+          segFeather.rotation.y = Math.sin(t * tailSwaySpeed - i * 0.32 + off * 0.25) * tailSwayAmp;
+        }
       }
     }
     // Backward compatibility check for unsegmented tail
