@@ -58,8 +58,8 @@ describe("getBiome", () => {
     expect(getBiome("boar").particleKind).toBe("ember");
   });
 
-  it("ox → volcanic biome", () => {
-    expect(getBiome("ox").particleKind).toBe("ember");
+  it("scorpion → volcanic biome", () => {
+    expect(getBiome("scorpion").particleKind).toBe("ember");
   });
 
   it("ant → desert biome", () => {

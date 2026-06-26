@@ -137,7 +137,7 @@ export function getBiome(bodyId: string): BiomeConfig {
   const FOREST_IDS = new Set(["wolf", "bear", "gorilla", "tiger"]);
   const SKY_IDS = new Set(["eagle", "dragon"]);
   const OCEAN_IDS = new Set(["cobra", "eel", "jellyfish"]);
-  const VOLCANO_IDS = new Set(["rhino", "boar", "ox"]);
+  const VOLCANO_IDS = new Set(["rhino", "boar", "scorpion"]);
 
   if (FOREST_IDS.has(bodyId)) return forest;
   if (SKY_IDS.has(bodyId)) return sky;

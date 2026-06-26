@@ -387,7 +387,7 @@ function renderBestiary(): void {
     // Sum stats across all 5 slots
     const parts = animal.parts;
     const totalAtk = (parts.head.stats.attack ?? 0) + (parts.forelimbs.stats.attack ?? 0)
-      + (parts.tail?.stats?.attack ?? 0) + (parts.body.stats.attack ?? 0) + (parts.hindlimbs.stats.attack ?? 0);
+      + (parts.tail.stats.attack ?? 0) + (parts.body.stats.attack ?? 0) + (parts.hindlimbs.stats.attack ?? 0);
     const totalDef = (parts.body.stats.defense ?? 0) + (parts.head.stats.defense ?? 0);
     const totalHp  = parts.body.stats.health ?? 0;
 
@@ -396,7 +396,7 @@ function renderBestiary(): void {
     // Collect unique abilities from all slots
     const abilitySet = new Set<string>();
     for (const part of Object.values(parts)) {
-      if (part?.ability) abilitySet.add(part.ability);
+      if (part.ability) abilitySet.add(part.ability);
     }
     const abilities = [...abilitySet].join(", ");
 
