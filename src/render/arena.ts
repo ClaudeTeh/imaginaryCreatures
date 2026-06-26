@@ -715,18 +715,33 @@ export function playBattle(
           current.y += Math.sin(pr.progress * Math.PI) * 1.5;
           pr.mesh.position.copy(current);
           
-          // Emit trail particles
-          const trailGeo = new THREE.SphereGeometry(0.04, 4, 4);
-          const trailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pr.colorHex), transparent: true, opacity: 0.7 });
-          const trailMesh = new THREE.Mesh(trailGeo, trailMat);
-          trailMesh.position.copy(current);
-          scene3D.add(trailMesh);
-          activeParticles3D.push({
-            mesh: trailMesh,
-            velocity: new THREE.Vector3((Math.random() - 0.5) * 0.01, 0.01, (Math.random() - 0.5) * 0.01),
-            life: 0.4,
-            decay: 0.04 * timeScale,
-          });
+          // Emit trail particles (2-3 tiny particles)
+          const particlesCount = 2 + Math.floor(Math.random() * 2);
+          for (let pIdx = 0; pIdx < particlesCount; pIdx++) {
+            const pSize = 0.02 + Math.random() * 0.035;
+            const trailGeo = new THREE.SphereGeometry(pSize, 4, 4);
+            const trailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pr.colorHex), transparent: true, opacity: 0.8 });
+            const trailMesh = new THREE.Mesh(trailGeo, trailMat);
+            
+            const offset = new THREE.Vector3(
+              (Math.random() - 0.5) * 0.08,
+              (Math.random() - 0.5) * 0.08,
+              (Math.random() - 0.5) * 0.08
+            );
+            trailMesh.position.copy(current).add(offset);
+            scene3D.add(trailMesh);
+            
+            const velX = (Math.random() - 0.5) * 0.015;
+            const velY = 0.005 + Math.random() * 0.015;
+            const velZ = (Math.random() - 0.5) * 0.015;
+            
+            activeParticles3D.push({
+              mesh: trailMesh,
+              velocity: new THREE.Vector3(velX, velY, velZ),
+              life: 0.35 + Math.random() * 0.15,
+              decay: (0.04 + Math.random() * 0.02) * timeScale,
+            });
+          }
         }
       }
 
