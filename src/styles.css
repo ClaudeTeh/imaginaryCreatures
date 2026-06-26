@@ -811,3 +811,27 @@ canvas#arena {
   color: #c8a84b;
   background: rgba(200, 168, 75, 0.1);
 }
+
+/* Gauntlet mode */
+.gauntlet-badge {
+  text-align: center;
+  padding: 6px 0;
+  font-size: 13px;
+  color: #c8a84b;
+  letter-spacing: 0.05em;
+}
+.gauntlet-continue {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(10, 8, 20, 0.95);
+  border-top: 1px solid #c8a84b;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 8000;
+}
+.gauntlet-continue-text { font-size: 15px; color: #8a9bb5; }

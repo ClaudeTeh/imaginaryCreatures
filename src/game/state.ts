@@ -21,6 +21,7 @@ export interface GameState {
   battleSpeed: BattleSpeed;
   showOpponent: boolean;
   achievements: string[];
+  gauntletBestScore: number;
 }
 
 /** Animals available at the start; the rest unlock by winning. */
@@ -51,6 +52,7 @@ export function newGame(startTier: 1 | 2 | 3 = 1, currentState?: Partial<GameSta
     battleSpeed: currentState?.battleSpeed ?? "normal",
     showOpponent: currentState?.showOpponent ?? true,
     achievements: [],
+    gauntletBestScore: 0,
   };
 }
 
@@ -76,6 +78,7 @@ export function load(): GameState {
         : "normal",
       showOpponent: data.showOpponent ?? true,
       achievements: data.achievements ?? [],
+      gauntletBestScore: data.gauntletBestScore ?? 0,
     };
   } catch {
     return newGame();

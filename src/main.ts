@@ -20,11 +20,17 @@ let state: GameState = load();
 let cancelArena: (() => void) | null = null;
 let newGameExpanded = false;
 
+let gauntletRound = 0;           // 0 = not in gauntlet
+let gauntletHpRatio = 1.0;       // surviving HP fraction carried between rounds
+let lastBattleResult: ReturnType<typeof simulateBattle> | null = null;
+const GAUNTLET_ROUNDS = 5;
+
 const ACHIEVEMENT_LABELS: Record<string, string> = {
-  first_blood:    "🩸 First Victory — You won your first battle!",
-  streak_5:       "🔥 On Fire — 5-win streak!",
-  tier1_complete: "🧬 Tier 1 Complete — All starter species unlocked!",
-  ten_wins:       "⚔ Veteran — 10 battles won!",
+  first_blood:       "🩸 First Victory — You won your first battle!",
+  streak_5:          "🔥 On Fire — 5-win streak!",
+  tier1_complete:    "🧬 Tier 1 Complete — All starter species unlocked!",
+  ten_wins:          "⚔ Veteran — 10 battles won!",
+  gauntlet_complete: "⚔ Gauntlet Champion — Survived all 5 rounds!",
 };
 
 function checkAchievements(): string[] {
@@ -249,6 +255,16 @@ function settingsBar(): HTMLElement {
     ["📅 Daily"],
   );
 
+  const gauntletBtn = el(
+    "button",
+    {
+      class: "settings-btn",
+      title: "Gauntlet — 5 battles, HP carries over. Can you survive all 5?",
+      onclick: () => startGauntlet(),
+    },
+    ["⚔ Gauntlet"],
+  );
+
   const row = el("div", { class: "settings-bar" }, [
     el("div", { class: "settings-group" }, [
       el("span", { class: "settings-label" }, ["Speed"]),
@@ -258,6 +274,7 @@ function settingsBar(): HTMLElement {
     el("div", { class: "settings-group" }, [newGameBtn]),
     el("div", { class: "settings-group" }, [bestiaryBtn]),
     el("div", { class: "settings-group" }, [dailyBtn]),
+    el("div", { class: "settings-group" }, [gauntletBtn]),
   ]);
 
   if (newGameExpanded) {
@@ -490,10 +507,11 @@ function renderBestiary(): void {
   });
 
   const achievementDefs = [
-    { id: "first_blood",    label: "🩸 First Victory" },
-    { id: "streak_5",       label: "🔥 On Fire (5-streak)" },
-    { id: "tier1_complete", label: "🧬 Tier 1 Complete" },
-    { id: "ten_wins",       label: "⚔ Veteran (10 wins)" },
+    { id: "first_blood",       label: "🩸 First Victory" },
+    { id: "streak_5",          label: "🔥 On Fire (5-streak)" },
+    { id: "tier1_complete",    label: "🧬 Tier 1 Complete" },
+    { id: "ten_wins",          label: "⚔ Veteran (10 wins)" },
+    { id: "gauntlet_complete", label: "⚔ Gauntlet Champion" },
   ];
   const achSection = el("div", { style: "margin-top:20px;" }, [
     el("h3", { style: "color:#c8a84b;font-size:14px;margin:0 0 8px;" }, ["🏆 Achievements"]),
@@ -517,6 +535,189 @@ function renderBestiary(): void {
       achSection,
     ]),
   );
+}
+
+function startGauntlet(): void {
+  initAudio();
+  gauntletRound = 1;
+  gauntletHpRatio = 1.0;
+  runGauntletRound();
+}
+
+function runGauntletRound(): void {
+  if (cancelArena) { cancelArena(); cancelArena = null; }
+
+  // Build opponent based on round (tiers: 1,1,2,2,3)
+  const tierMap: Record<number, 1 | 2 | 3> = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 3 };
+  const tier = tierMap[gauntletRound] ?? 3;
+
+  let opponent: ReturnType<typeof buildCreature>;
+  if (gauntletRound === GAUNTLET_ROUNDS) {
+    // Final boss: spliced chimera from two random genomes
+    const rng1 = makeRng(Date.now() ^ 0xcafe);
+    const rng2 = makeRng(Date.now() ^ 0xbeef);
+    const g1 = randomGenome(rng1, state.unlocked);
+    const g2 = randomGenome(rng2, state.unlocked);
+    opponent = buildCreature(breed(g1, g2, makeRng(Date.now() ^ 0xdead), { pool: state.unlocked }));
+  } else {
+    const pool = state.unlocked.filter(id => {
+      const animal = ANIMALS.find(a => a.id === id);
+      return animal && animal.tier <= tier;
+    });
+    const pickPool = pool.length > 0 ? pool : state.unlocked;
+    const rng = makeRng(Date.now() ^ (gauntletRound * 0x9e3779b9));
+    const pickedId = pickPool[Math.floor(rng() * pickPool.length)];
+    opponent = buildCreature({ head: pickedId, body: pickedId, forelimbs: pickedId, hindlimbs: pickedId, tail: pickedId });
+  }
+
+  // Apply HP carry-over to player by scaling stats.health
+  const basePlayer = buildCreature(state.player);
+  const carriedHp = Math.max(1, Math.round(basePlayer.stats.health * gauntletHpRatio));
+  const player = { ...basePlayer, stats: { ...basePlayer.stats, health: carriedHp } };
+
+  lastBattleResult = simulateBattle(player, opponent, makeRng((Date.now() >>> 1) ^ gauntletRound));
+
+  const appEl = document.getElementById("app")!;
+  clear(appEl);
+  screen = "arena";
+
+  const roundBadge = el("div", { class: "gauntlet-badge" }, [
+    `⚔ Gauntlet — Round ${gauntletRound}/${GAUNTLET_ROUNDS}  HP: ${Math.round(gauntletHpRatio * 100)}%`,
+  ]);
+
+  const canvas = el("canvas", {
+    id: "arena",
+    role: "img",
+    "aria-label": `Gauntlet round ${gauntletRound} arena`,
+  }) as HTMLCanvasElement;
+  const resultArea = el("div", { class: "center" }, []);
+
+  const arenaPanel = el("div", { class: "panel arena-wrap" }, [
+    el("div", { class: "arena-fighters" }, [
+      el("div", { class: "fighter-tag" }, [
+        el("div", { class: "nm" }, [`${basePlayer.emoji} ${basePlayer.name}`]),
+        el("div", { class: "pw" }, [`HP ${Math.round(gauntletHpRatio * 100)}% · Power ${powerRating(basePlayer)}`]),
+      ]),
+      el("div", { class: "fighter-tag right" }, [
+        el("div", { class: "nm" }, [`${opponent.name} ${opponent.emoji}`]),
+        el("div", { class: "pw" }, [gauntletRound === GAUNTLET_ROUNDS ? "👑 Final Boss" : `Tier ${tier} · Power ${powerRating(opponent)}`]),
+      ]),
+    ]),
+    canvas,
+    resultArea,
+  ]);
+
+  appEl.append(topbar(), settingsBar(), roundBadge, arenaPanel);
+
+  const speedMult = SPEED_OPTS.find((s) => s.id === state.battleSpeed)?.mult ?? 1;
+
+  cancelArena = playBattle(
+    canvas,
+    lastBattleResult,
+    (winner) => {
+      cancelArena = null;
+      onGauntletRoundEnd(resultArea, winner, opponent);
+    },
+    speedMult,
+  );
+}
+
+function onGauntletRoundEnd(
+  area: HTMLElement,
+  winner: Side | "draw",
+  _opponent: ReturnType<typeof buildCreature>,
+): void {
+  const playerWon = winner === "a";
+  const result = lastBattleResult!;
+
+  if (!playerWon) {
+    // Gauntlet over — show failure screen
+    const roundsSurvived = gauntletRound - 1;
+    gauntletRound = 0;
+    gauntletHpRatio = 1.0;
+    state.losses++;
+    state.streak = 0;
+    save(state);
+    sfxLose();
+
+    clear(area);
+    area.append(
+      el("div", { class: "fadein" }, [
+        el("div", { class: "result-banner lose" }, ["GAUNTLET FAILED"]),
+        el("p", { class: "hint" }, [
+          `Survived ${roundsSurvived} round${roundsSurvived !== 1 ? "s" : ""} out of ${GAUNTLET_ROUNDS}.`,
+        ]),
+        el("div", { class: "btnrow", style: "justify-content:center" }, [
+          el("button", { class: "accent", onclick: () => startGauntlet() }, ["⚔ Try Again"]),
+          el("button", { onclick: renderLab }, ["🧪 Back to Lab"]),
+        ]),
+      ]),
+    );
+    return;
+  }
+
+  // Compute remaining HP ratio from events
+  // baseHp is the full (unscaled) health of the player's creature
+  const baseHp = buildCreature(state.player).stats.health;
+  const roundStartHp = Math.max(1, Math.round(baseHp * gauntletHpRatio));
+  let dmgTaken = 0;
+  for (const e of result.events) {
+    if (e.kind === "attack" && e.by === "b") {
+      dmgTaken += e.dmg;
+    }
+    if (e.kind === "poison" && e.on === "a") {
+      dmgTaken += e.dmg;
+    }
+  }
+  const playerHpRemaining = Math.max(1, roundStartHp - dmgTaken);
+  gauntletHpRatio = playerHpRemaining / baseHp;
+
+  state.wins++;
+  state.streak++;
+
+  if (gauntletRound >= GAUNTLET_ROUNDS) {
+    // Won the whole gauntlet!
+    if (!state.achievements.includes("gauntlet_complete")) {
+      state.achievements.push("gauntlet_complete");
+    }
+    if (gauntletRound > state.gauntletBestScore) {
+      state.gauntletBestScore = gauntletRound;
+    }
+    save(state);
+    showAchievementToast("gauntlet_complete");
+    sfxWin();
+
+    gauntletRound = 0;
+    gauntletHpRatio = 1.0;
+
+    clear(area);
+    area.append(
+      el("div", { class: "fadein" }, [
+        el("div", { class: "result-banner win" }, ["GAUNTLET COMPLETE!"]),
+        el("p", { class: "hint" }, ["You survived all 5 rounds. You are the Gauntlet Champion!"]),
+        el("div", { class: "btnrow", style: "justify-content:center" }, [
+          el("button", { class: "accent", onclick: () => startGauntlet() }, ["⚔ Run Again"]),
+          el("button", { onclick: renderLab }, ["🧪 Back to Lab"]),
+        ]),
+      ]),
+    );
+    return;
+  }
+
+  gauntletRound++;
+  save(state);
+  sfxWin();
+
+  // Show "Round X won!" overlay with continue button
+  const cont = el("div", { class: "gauntlet-continue" }, [
+    el("div", { class: "gauntlet-continue-text" }, [
+      `✅ Round ${gauntletRound - 1} Won!  HP remaining: ${Math.round(gauntletHpRatio * 100)}%`,
+    ]),
+    el("button", { class: "accent", onclick: () => { cont.remove(); runGauntletRound(); } }, [
+      `Round ${gauntletRound} →`,
+    ]),
+  ]);
+  document.getElementById("app")!.appendChild(cont);
 }
 
 function renderLab() {
