@@ -34,6 +34,8 @@ export const ANIMAL_COLORS: Record<string, PartColors> = {
   rhino:    { fill: '#707060', shade: '#3c3c30', accent: '#c0b898' },
   eel:      { fill: '#106050', shade: '#083028', accent: '#50e8d0' },
   tiger:    { fill: '#c86008', shade: '#6c2e00', accent: '#f0a828' },
+  dragon:   { fill: '#7c1010', shade: '#3c0808', accent: '#ff6030' },
+  jellyfish:{ fill: '#3c1870', shade: '#1c0840', accent: '#b060ff' },
 };
 
 // ─── shared helpers ───────────────────────────────────────────────────────────

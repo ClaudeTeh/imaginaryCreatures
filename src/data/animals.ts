@@ -188,6 +188,32 @@ export const ANIMALS: Animal[] = [
       tail: { stats: { speed: 8 } },
     },
   },
+  {
+    id: "dragon",
+    name: "Dragon",
+    emoji: "🐉",
+    tier: 3,
+    parts: {
+      head: { stats: { attack: 18, energy: 10 }, ability: "spit", trait: "predator" },
+      body: { stats: { health: 58, defense: 10 }, ability: "frenzy", trait: "hardy" },
+      forelimbs: { stats: { attack: 16, energy: 6 }, ability: "charge" },
+      hindlimbs: { stats: { speed: 10 }, trait: "swift" },
+      tail: { stats: { attack: 12, energy: 8 }, ability: "shock" },
+    },
+  },
+  {
+    id: "jellyfish",
+    name: "Jellyfish",
+    emoji: "🪼",
+    tier: 3,
+    parts: {
+      head: { stats: { attack: 10, energy: 14 }, ability: "shock", trait: "keenSenses" },
+      body: { stats: { health: 38, defense: 6 }, ability: "regenerate" },
+      forelimbs: { stats: { attack: 8, energy: 8 }, ability: "leech" },
+      hindlimbs: { stats: { speed: 9 }, trait: "swift" },
+      tail: { stats: { energy: 10 }, ability: "venom" },
+    },
+  },
 ];
 
 export const ANIMALS_BY_ID: Record<string, Animal> = Object.fromEntries(

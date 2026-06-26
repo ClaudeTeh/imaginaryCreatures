@@ -137,6 +137,44 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       }
       break;
     }
+    case "dragon": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      // Overlapping scale pattern — diamond-grid
+      ctx.fillStyle = accentHex;
+      for (let row = 0; row < 12; row++) {
+        const offset = (row % 2) * 22;
+        for (let col = 0; col < 8; col++) {
+          const sx = col * 44 + offset - 22;
+          const sy = row * 24 - 12;
+          ctx.beginPath();
+          ctx.moveTo(sx + 22, sy);
+          ctx.lineTo(sx + 44, sy + 16);
+          ctx.lineTo(sx + 22, sy + 24);
+          ctx.lineTo(sx, sy + 16);
+          ctx.closePath();
+          ctx.globalAlpha = 0.35;
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1.0;
+      break;
+    }
+    case "jellyfish": {
+      ctx.fillStyle = baseHex;
+      ctx.fillRect(0, 0, 256, 256);
+      // Bioluminescent radial pulse rings
+      for (let ring = 0; ring < 6; ring++) {
+        const r = 20 + ring * 36;
+        const grad = ctx.createRadialGradient(128, 128, r - 12, 128, 128, r);
+        grad.addColorStop(0, accentHex + "00");
+        grad.addColorStop(0.5, accentHex + "55");
+        grad.addColorStop(1, accentHex + "00");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 256, 256);
+      }
+      break;
+    }
     default: {
       ctx.fillStyle = baseHex;
       ctx.fillRect(0, 0, 256, 256);
@@ -617,6 +655,38 @@ function buildHead(animalId: string): THREE.Group {
       const fin = cone(0.12, 0.4, c.accent, { emissive: c.accent, emissiveI: 0.4, noTexture: true });
       fin.position.set(0, 0.6, -0.1); g.add(fin); break;
     }
+    case "dragon": {
+      // Two curved horns
+      for (const s of [-1, 1] as const) {
+        const horn = cone(0.1, 0.55, c.accent, { rough: 0.3, noTexture: true });
+        horn.position.set(s * 0.32, 0.62, -0.1);
+        horn.rotation.set(-0.15, 0, s * 0.45);
+        g.add(horn);
+      }
+      // Snout with nostril ridges
+      const snout = sphere(0.35, c.shade); snout.scale.set(1, 0.75, 1.1); snout.position.set(0, -0.08, 0.52); g.add(snout);
+      // Fire-glow under chin — plain emissive sphere, no toon shading needed
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0xff5020 });
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), glowMat);
+      glow.position.set(0, -0.32, 0.38); g.add(glow);
+      break;
+    }
+    case "jellyfish": {
+      // Translucent dome bell on top
+      const bell = sphere(0.62, c.fill); bell.scale.set(1.2, 0.7, 1.2);
+      const bellMat = bell.material as THREE.MeshToonMaterial;
+      bellMat.transparent = true;
+      bellMat.opacity = 0.72;
+      bell.position.set(0, 0.2, 0); g.add(bell);
+      // Dangling oral arms
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const arm = cyl(0.03, 0.02, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.6, noTexture: true });
+        arm.position.set(Math.cos(angle) * 0.28, -0.5, Math.sin(angle) * 0.28);
+        g.add(arm);
+      }
+      break;
+    }
     default: ears(0.3, 0.16, 0.4);
   }
   return g;
@@ -1057,6 +1127,16 @@ export function buildCreatureModel(genome: Genome): THREE.Group {
     rageLight.position.set(0, 1.1, -0.2);
     root.add(rageLight);
   }
+  if (genome.head === "dragon" || genome.body === "dragon") {
+    const fireLight = new THREE.PointLight(0xff5010, 1.5, 8);
+    fireLight.position.set(0, 1.6, 0.5);
+    root.add(fireLight);
+  }
+  if (genome.head === "jellyfish" || genome.body === "jellyfish") {
+    const pulseLight = new THREE.PointLight(0x9040ff, 1.2, 7);
+    pulseLight.position.set(0, 1.7, 0.3);
+    root.add(pulseLight);
+  }
 
   return root;
 }
@@ -1258,8 +1338,8 @@ export function mountCreature3D(
     const forelimbs = model.getObjectByName("forelimbs");
     const hindlimbs = model.getObjectByName("hindlimbs");
 
-    const isAvian = activeGenome.forelimbs === "eagle" || activeGenome.body === "eagle";
-    const isSerpentine = activeGenome.body === "cobra" || activeGenome.body === "eel";
+    const isAvian = activeGenome.forelimbs === "eagle" || activeGenome.body === "eagle" || activeGenome.body === "dragon";
+    const isSerpentine = activeGenome.body === "cobra" || activeGenome.body === "eel" || activeGenome.body === "jellyfish";
     const isHeavyMammal = ["bear", "rhino", "gorilla", "boar"].includes(activeGenome.body);
     const isInsect = ["ant", "scorpion", "crab"].includes(activeGenome.body);
 

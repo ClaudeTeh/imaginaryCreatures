@@ -134,6 +134,7 @@ export function playBattle(
     blinkTimer: number;
     deathTimer: number;
     actionTimerAccumulator: number;
+    vocalTimer: number;
     onHitCallback?: () => void;
   }
 
@@ -318,6 +319,7 @@ export function playBattle(
         blinkTimer: 0,
         deathTimer: 0,
         actionTimerAccumulator: 0,
+        vocalTimer: Math.floor(Math.random() * 300 + 200),
       },
       b: {
         model: buildCreatureModel(sb.genome as unknown as Genome),
@@ -335,6 +337,7 @@ export function playBattle(
         blinkTimer: 0,
         deathTimer: 0,
         actionTimerAccumulator: 0,
+        vocalTimer: Math.floor(Math.random() * 300 + 350),
       },
     };
 
@@ -704,6 +707,25 @@ export function playBattle(
 
         f.time += 0.016 * timeScale;
 
+        // Idle vocalization — random soundwave rings every 8-15 seconds
+        if (fView.displayHp > 0.5 && frame > introDuration + 60 && f.actionState === "idle") {
+          f.vocalTimer -= timeScale;
+          if (f.vocalTimer <= 0) {
+            const headPart = f.model.getObjectByName("head");
+            if (headPart) {
+              const mouthPos = new THREE.Vector3();
+              headPart.getWorldPosition(mouthPos);
+              mouthPos.z += side === "a" ? 0.5 : -0.5;
+              const vocalColor = fView.genome.body === "eel" ? "#50e8d0"
+                : fView.genome.body === "cobra" ? "#a8e030"
+                : fView.genome.body === "dragon" ? "#ff6030"
+                : "#e8d8a0";
+              spawnSoundwaveRing3D(mouthPos, vocalColor);
+            }
+            f.vocalTimer = Math.floor(Math.random() * 300 + 480);
+          }
+        }
+
         // Action State machine transitions (tick-based)
         f.actionTimerAccumulator += timeScale;
         let elapsedTicks = 0;
@@ -727,10 +749,10 @@ export function playBattle(
 
             // --- Genome-specific mid-strike VFX trails ---
             const fvStrike = fView;
-            const isAvianStrike   = fvStrike.genome.forelimbs === "eagle" || fvStrike.genome.body === "eagle";
+            const isAvianStrike   = fvStrike.genome.forelimbs === "eagle" || fvStrike.genome.body === "eagle" || fvStrike.genome.body === "dragon";
             const isClawStrike    = ["crab", "scorpion", "eagle"].includes(fvStrike.genome.forelimbs);
             const isGorillaStrike = fvStrike.genome.forelimbs === "gorilla";
-            const isSerpStrike    = ["cobra", "eel"].includes(fvStrike.genome.body);
+            const isSerpStrike    = ["cobra", "eel", "jellyfish"].includes(fvStrike.genome.body);
 
             if (isAvianStrike && Math.random() < 0.7) {
               spawnSpeedLine3D(f.model.position, side);
@@ -822,15 +844,15 @@ export function playBattle(
 
         const alive = fView.displayHp > 0.5;
         
-        const isAvian = fView.genome.forelimbs === "eagle" || fView.genome.body === "eagle";
-        const isSerpentine = fView.genome.body === "cobra" || fView.genome.body === "eel";
+        const isAvian = fView.genome.forelimbs === "eagle" || fView.genome.body === "eagle" || fView.genome.body === "dragon";
+        const isSerpentine = fView.genome.body === "cobra" || fView.genome.body === "eel" || fView.genome.body === "jellyfish";
         const isHeavyMammal = ["bear", "rhino", "gorilla", "boar"].includes(fView.genome.body);
         const isInsect = ["ant", "scorpion", "crab"].includes(fView.genome.body);
 
         const isClawSwipe = fView.genome.forelimbs === "crab" || fView.genome.forelimbs === "scorpion";
         const isAvianDive = fView.genome.forelimbs === "eagle";
-        const isTailWhip = ["scorpion", "cobra", "eel", "tiger"].includes(fView.genome.tail);
-        const isBiteSlam = ["boar", "wolf", "bear", "rhino", "cobra"].includes(fView.genome.head);
+        const isTailWhip = ["scorpion", "cobra", "eel", "tiger", "dragon", "jellyfish"].includes(fView.genome.tail);
+        const isBiteSlam = ["boar", "wolf", "bear", "rhino", "cobra", "dragon"].includes(fView.genome.head);
         const isGorillaSlam = fView.genome.forelimbs === "gorilla";
 
         if (alive) {
