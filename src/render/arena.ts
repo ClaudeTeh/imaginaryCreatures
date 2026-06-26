@@ -73,9 +73,78 @@ interface FloatText {
   size: number;
 }
 
+export interface BiomeConfig {
+  skyHex: number;
+  fogHex: number;
+  fogDensity: number;
+  floorHex: number;
+  ambientHex: number;
+  particleColor: string;
+  particleKind: "leaf" | "streak" | "bubble" | "ember" | "dust";
+}
+
 const W = 960;
 const H = 420;
 const GROUND_Y = 300;
+
+export function getBiome(bodyId: string): BiomeConfig {
+  const forest: BiomeConfig = {
+    skyHex: 0x060e06,
+    fogHex: 0x0a1a0a,
+    fogDensity: 0.014,
+    floorHex: 0x1a2a10,
+    ambientHex: 0x334422,
+    particleColor: "#2d6e2d",
+    particleKind: "leaf",
+  };
+  const sky: BiomeConfig = {
+    skyHex: 0x04080f,
+    fogHex: 0x080f20,
+    fogDensity: 0.010,
+    floorHex: 0x2a2a35,
+    ambientHex: 0x223355,
+    particleColor: "#c8d8ff",
+    particleKind: "streak",
+  };
+  const ocean: BiomeConfig = {
+    skyHex: 0x020a10,
+    fogHex: 0x051520,
+    fogDensity: 0.016,
+    floorHex: 0x0f2530,
+    ambientHex: 0x103040,
+    particleColor: "#20c0a0",
+    particleKind: "bubble",
+  };
+  const volcano: BiomeConfig = {
+    skyHex: 0x0f0202,
+    fogHex: 0x1a0505,
+    fogDensity: 0.015,
+    floorHex: 0x2a1008,
+    ambientHex: 0x442010,
+    particleColor: "#ff6020",
+    particleKind: "ember",
+  };
+  const desert: BiomeConfig = {
+    skyHex: 0x0f0a02,
+    fogHex: 0x1a1205,
+    fogDensity: 0.012,
+    floorHex: 0x2a2010,
+    ambientHex: 0x443320,
+    particleColor: "#c0a040",
+    particleKind: "dust",
+  };
+
+  const FOREST_IDS = new Set(["wolf", "bear", "gorilla", "tiger"]);
+  const SKY_IDS = new Set(["eagle", "dragon"]);
+  const OCEAN_IDS = new Set(["cobra", "eel", "jellyfish"]);
+  const VOLCANO_IDS = new Set(["rhino", "boar", "ox"]);
+
+  if (FOREST_IDS.has(bodyId)) return forest;
+  if (SKY_IDS.has(bodyId)) return sky;
+  if (OCEAN_IDS.has(bodyId)) return ocean;
+  if (VOLCANO_IDS.has(bodyId)) return volcano;
+  return desert;
+}
 
 /**
  * Replay a simulated battle on the canvas. Pure presentation — it consumes the
