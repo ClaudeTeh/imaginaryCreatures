@@ -1357,9 +1357,20 @@ export function playBattle(
         const wingR = f.model.getObjectByName("wing_r");
         const wingL = f.model.getObjectByName("wing_l");
         if (wingR && wingL && alive) {
-          const flap = Math.sin(f.time * (isAvian ? 10 : 6)) * (isAvian ? 0.45 : 0.3);
-          wingR.rotation.z = flap;
-          wingL.rotation.z = -flap;
+          if (["windup", "strike"].includes(f.actionState)) {
+            // Fold wings back aerodynamically along the body
+            wingR.rotation.z = -0.15;
+            wingL.rotation.z = 0.15;
+            wingR.rotation.y = 1.2;
+            wingL.rotation.y = -1.2;
+          } else {
+            // Flap normally
+            const flap = Math.sin(f.time * (isAvian ? 10 : 6)) * (isAvian ? 0.45 : 0.3);
+            wingR.rotation.z = flap;
+            wingL.rotation.z = -flap;
+            wingR.rotation.y = 0;
+            wingL.rotation.y = 0;
+          }
         }
         
         // Hit-flash white material on damage
