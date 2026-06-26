@@ -241,6 +241,14 @@ export function playBattle(
   }
 
   const activeParticles3D: Particle3D[] = [];
+
+  interface BiomeParticle {
+    mesh: THREE.Points;
+    velocities: Float32Array;  // [vx, vy, vz] per particle
+    count: number;
+  }
+  let biomeParticleSystem: BiomeParticle | null = null;
+
   const activeProjectiles3D: Projectile3D[] = [];
   const activeBeams3D: Beam3D[] = [];
   const activeFloats3D: Float3D[] = [];
@@ -288,6 +296,40 @@ export function playBattle(
 
   const introDuration = 60; // frames for camera fly-in
 
+  const spawnBiomeParticles = (scene: THREE.Scene, cfg: BiomeConfig): void => {
+    const COUNT = 40;
+    const positions = new Float32Array(COUNT * 3);
+    const velocities = new Float32Array(COUNT * 3);
+
+    for (let i = 0; i < COUNT; i++) {
+      positions[i * 3]     = (Math.random() - 0.5) * 20;
+      positions[i * 3 + 1] = Math.random() * 12;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+
+      const speed = cfg.particleKind === "streak" ? 0.08 : 0.02;
+      velocities[i * 3]     = cfg.particleKind === "streak" ? (Math.random() - 0.5) * speed * 4 : (Math.random() - 0.5) * speed;
+      velocities[i * 3 + 1] = cfg.particleKind === "bubble" || cfg.particleKind === "ember" ? speed + Math.random() * speed
+                             : cfg.particleKind === "leaf"   ? -(speed + Math.random() * speed)
+                             : (Math.random() - 0.5) * speed * 0.3;
+      velocities[i * 3 + 2] = cfg.particleKind === "streak" ? (Math.random() - 0.5) * speed * 2 : (Math.random() - 0.5) * speed * 0.5;
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+    const mat = new THREE.PointsMaterial({
+      color: new THREE.Color(cfg.particleColor),
+      size: cfg.particleKind === "streak" ? 0.08 : 0.12,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+
+    const points = new THREE.Points(geo, mat);
+    scene.add(points);
+    biomeParticleSystem = { mesh: points, velocities, count: COUNT };
+  };
+
   try {
     renderer3D = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer3D.setSize(W, H);
@@ -297,15 +339,16 @@ export function playBattle(
     renderer3D.toneMapping = THREE.ACESFilmicToneMapping;
     renderer3D.toneMappingExposure = 1.25;
 
+    const biome = getBiome(sa.genome.body);
     scene3D = new THREE.Scene();
-    scene3D.background = new THREE.Color(0x0e1730);
-    scene3D.fog = new THREE.FogExp2(0x0e1730, 0.012);
+    scene3D.background = new THREE.Color(biome.skyHex);
+    scene3D.fog = new THREE.FogExp2(biome.fogHex, biome.fogDensity);
 
     camera3D = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
     camera3D.position.set(0, 14, 22); // Start back for intro fly-in
     camera3D.lookAt(0, 1.2, 0);
 
-    ambientLight = new THREE.AmbientLight(0x445588, 0.9);
+    ambientLight = new THREE.AmbientLight(biome.ambientHex, 0.9);
     scene3D.add(ambientLight);
 
     keyLight = new THREE.DirectionalLight(0xffedd5, 1.5);
@@ -347,7 +390,7 @@ export function playBattle(
     // Arena Floor
     arenaGroup = new THREE.Group();
     const platGeo = new THREE.CylinderGeometry(10, 10.5, 0.8, 64);
-    platMat = new THREE.MeshStandardMaterial({ color: 0x16223f, metalness: 0.8, roughness: 0.3 });
+    platMat = new THREE.MeshStandardMaterial({ color: biome.floorHex, metalness: 0.8, roughness: 0.3 });
     platform = new THREE.Mesh(platGeo, platMat);
     platform.position.y = -0.4;
     platform.receiveShadow = true;
@@ -364,6 +407,7 @@ export function playBattle(
     ring.position.y = 0.01;
     arenaGroup.add(ring);
     scene3D.add(arenaGroup);
+    spawnBiomeParticles(scene3D, biome);
 
     // Build 3D models from genomes
     const shadowA = createSoftShadowMesh();
@@ -642,6 +686,24 @@ export function playBattle(
           (p.mesh.material as THREE.Material).dispose();
           activeParticles3D.splice(i, 1);
         }
+      }
+
+      // Ambient biome particles
+      if (biomeParticleSystem) {
+        const posAttr = biomeParticleSystem.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+        const pos = posAttr.array as Float32Array;
+        const vel = biomeParticleSystem.velocities;
+        for (let i = 0; i < biomeParticleSystem.count; i++) {
+          pos[i * 3]     += vel[i * 3];
+          pos[i * 3 + 1] += vel[i * 3 + 1];
+          pos[i * 3 + 2] += vel[i * 3 + 2];
+          // Wrap: reset particles that drift out of bounds
+          if (pos[i * 3 + 1] > 13) pos[i * 3 + 1] = -1;
+          if (pos[i * 3 + 1] < -1) pos[i * 3 + 1] = 13;
+          if (Math.abs(pos[i * 3])     > 11) pos[i * 3]     *= -0.9;
+          if (Math.abs(pos[i * 3 + 2]) > 11) pos[i * 3 + 2] *= -0.9;
+        }
+        posAttr.needsUpdate = true;
       }
 
       // Update active 3D beams
