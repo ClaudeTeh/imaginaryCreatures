@@ -8,6 +8,18 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>" />
   </head>
   <body>
+    <div id="models-loading-overlay" style="
+      display:none;
+      position:fixed;inset:0;
+      background:rgba(10,8,20,0.85);
+      z-index:9999;
+      align-items:center;justify-content:center;
+      flex-direction:column;gap:12px;
+      color:#c8a84b;font-family:monospace;font-size:16px;letter-spacing:0.08em;
+    ">
+      <div style="font-size:32px">🧬</div>
+      <div>LOADING CREATURES…</div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

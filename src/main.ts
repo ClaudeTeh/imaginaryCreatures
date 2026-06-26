@@ -34,17 +34,24 @@ function mount3dPreview(genome: Genome): HTMLElement | null {
   if (!creature3d) {
     // Lazy-import keeps three out of the initial bundle path until the Lab needs it.
     import("./render/creature3d")
-      .then(({ mountCreature3D }) => {
-        if (!preview3dHost) return;
-        try {
-          creature3d = mountCreature3D(preview3dHost, genome, 240);
-        } catch {
-          creature3dFailed = true;
-          preview3dHost?.remove();
-          preview3dHost = null;
-        }
+      .then(({ mountCreature3D, modelsReady }) => {
+        const overlay = document.getElementById("models-loading-overlay") as HTMLElement | null;
+        if (overlay) overlay.style.display = "flex";
+        return modelsReady.then(() => {
+          if (overlay) overlay.style.display = "none";
+          if (!preview3dHost) return;
+          try {
+            creature3d = mountCreature3D(preview3dHost, genome, 240);
+          } catch {
+            creature3dFailed = true;
+            preview3dHost?.remove();
+            preview3dHost = null;
+          }
+        });
       })
       .catch(() => {
+        const overlay = document.getElementById("models-loading-overlay") as HTMLElement | null;
+        if (overlay) overlay.style.display = "none";
         creature3dFailed = true;
       });
   } else {
