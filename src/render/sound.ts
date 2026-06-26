@@ -186,6 +186,91 @@ export function sfxDeath(): void {
   tone(200, 0.5, "sawtooth", 0.1, 40, 80);
 }
 
+export function startBattleMusic(biomeKind: string): () => void {
+  if (muted || !ctx) return () => {};
+
+  // Base notes per biome (MIDI-style frequencies)
+  const scales: Record<string, number[]> = {
+    forest:  [261.6, 293.7, 329.6, 392.0, 440.0],   // C major pentatonic — calm, natural
+    sky:     [293.7, 329.6, 392.0, 440.0, 523.3],   // D major pentatonic — bright, airy
+    ocean:   [261.6, 311.1, 349.2, 392.0, 466.2],   // C minor pentatonic — mysterious, deep
+    volcano: [220.0, 246.9, 293.7, 329.6, 369.9],   // A natural minor — tense, dramatic
+    desert:  [246.9, 277.2, 329.6, 369.9, 415.3],   // B minor pentatonic — sparse, eerie
+  };
+
+  const notes = scales[biomeKind] ?? scales.forest;
+  let stopped = false;
+  let noteIdx = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const playNext = () => {
+    if (stopped || muted || !ctx) return;
+    const note = notes[noteIdx % notes.length];
+    // Soft triangle wave arpeggio — low gain so it doesn't overpower SFX
+    tone(note, 0.35, "triangle", 0.04);
+    // Occasional bass note
+    if (noteIdx % 4 === 0) tone(note / 2, 0.6, "sine", 0.03);
+    noteIdx++;
+    timer = setTimeout(playNext, 420);
+  };
+
+  // Start after a 600ms delay so the battle intro sound finishes first
+  timer = setTimeout(playNext, 600);
+
+  return () => {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+  };
+}
+
+export function startBiomeAmbient(biomeKind: string): () => void {
+  if (muted || !ctx) return () => {};
+
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const playAmbient = () => {
+    if (stopped || muted || !ctx) return;
+
+    switch (biomeKind) {
+      case "forest":
+        // Occasional bird chirp — high sine blip
+        if (Math.random() < 0.6) tone(2200 + Math.random() * 400, 0.06, "sine", 0.02, 2800);
+        break;
+      case "sky":
+        // Wind howl — filtered noise sweep
+        noise(0.4, 0.015);
+        tone(180, 0.5, "sine", 0.01, 220);
+        break;
+      case "ocean":
+        // Low whoosh — noise swell
+        noise(0.8, 0.018);
+        tone(80, 0.6, "sine", 0.01, 100);
+        break;
+      case "volcano":
+        // Low rumble — bass noise
+        noise(0.5, 0.02);
+        if (Math.random() < 0.3) tone(60, 0.4, "sawtooth", 0.015, 40);
+        break;
+      case "desert":
+        // Dry wind — quiet noise with slight pitch
+        noise(0.6, 0.01);
+        if (Math.random() < 0.2) tone(900 + Math.random() * 200, 0.08, "sine", 0.008, 700);
+        break;
+    }
+
+    const intervalMs = 1800 + Math.random() * 1200;
+    timer = setTimeout(playAmbient, intervalMs);
+  };
+
+  timer = setTimeout(playAmbient, 2000 + Math.random() * 1000);
+
+  return () => {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+  };
+}
+
 export function sfxWin(): void {
   [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, "triangle", 0.12, undefined, i * 110));
 }

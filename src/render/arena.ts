@@ -1,5 +1,5 @@
 import type { BattleEvent, BattleResult, Side } from "../combat/combat";
-import { sfxAbility, sfxDeath, sfxHeal, sfxHit, sfxRoar, sfxVocalize } from "./sound";
+import { sfxAbility, sfxDeath, sfxHeal, sfxHit, sfxRoar, sfxVocalize, startBattleMusic, startBiomeAmbient } from "./sound";
 import { drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail } from "./creatureParts";
 import * as THREE from "three";
 import { buildCreatureModel, createSoftShadowMesh } from "./creature3d";
@@ -181,6 +181,8 @@ export function playBattle(
   let ringMat: THREE.MeshStandardMaterial | null = null;
   let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
   let slowMoTimer = 0;
+  let stopMusic: () => void = () => {};
+  let stopAmbient: () => void = () => {};
 
   let ambientLight: THREE.AmbientLight | null = null;
   let keyLight: THREE.DirectionalLight | null = null;
@@ -408,6 +410,14 @@ export function playBattle(
     arenaGroup.add(ring);
     scene3D.add(arenaGroup);
     spawnBiomeParticles(scene3D, biome);
+
+    const biomeName =
+      biome.particleKind === "leaf"    ? "forest" :
+      biome.particleKind === "streak"  ? "sky" :
+      biome.particleKind === "bubble"  ? "ocean" :
+      biome.particleKind === "ember"   ? "volcano" : "desert";
+    stopMusic = startBattleMusic(biomeName);
+    stopAmbient = startBiomeAmbient(biomeName);
 
     // Build 3D models from genomes
     const shadowA = createSoftShadowMesh();
@@ -2281,6 +2291,8 @@ export function playBattle(
 
   raf = requestAnimationFrame(step);
   return () => {
+    stopMusic();
+    stopAmbient();
     cancelAnimationFrame(raf);
     if (use3D) {
       if (hudOverlay) {
