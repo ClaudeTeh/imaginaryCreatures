@@ -71,7 +71,7 @@ setMuted(state.muted);
 
 const app = document.getElementById("app")!;
 
-type Screen = "lab" | "arena" | "result";
+type Screen = "lab" | "arena" | "result" | "bestiary";
 let screen: Screen = "lab";
 
 function setGenome(next: Genome) {
@@ -191,6 +191,15 @@ function settingsBar(): HTMLElement {
     ["🗑 New Game"],
   );
 
+  const bestiaryBtn = el(
+    "button",
+    {
+      class: "settings-btn",
+      onclick: () => renderBestiary(),
+    },
+    ["📖 Bestiary"],
+  );
+
   const row = el("div", { class: "settings-bar" }, [
     el("div", { class: "settings-group" }, [
       el("span", { class: "settings-label" }, ["Speed"]),
@@ -198,6 +207,7 @@ function settingsBar(): HTMLElement {
     ]),
     el("div", { class: "settings-group" }, [oppBtn]),
     el("div", { class: "settings-group" }, [newGameBtn]),
+    el("div", { class: "settings-group" }, [bestiaryBtn]),
   ]);
 
   if (newGameExpanded) {
@@ -357,6 +367,62 @@ function positionTooltip(tooltip: HTMLElement, anchor: HTMLElement): void {
   tooltip.style.top = `${top}px`;
   tooltip.style.left = `${left}px`;
   tooltip.style.width = `${TIP_W}px`;
+}
+
+function renderBestiary(): void {
+  screen = "bestiary";
+  const app = document.getElementById("app")!;
+  clear(app);
+
+  const cards = ANIMALS.map((animal) => {
+    const isUnlocked = state.unlocked.includes(animal.id);
+    if (!isUnlocked) {
+      return el("div", { class: "bestiary-card locked" }, [
+        el("div", { class: "bestiary-card-emoji" }, ["🔒"]),
+        el("div", { class: "bestiary-card-name" }, ["???"]),
+        el("div", { class: "bestiary-card-tier" }, ["★".repeat(animal.tier)]),
+      ]);
+    }
+
+    // Sum stats across all 5 slots
+    const parts = animal.parts;
+    const totalAtk = (parts.head.stats.attack ?? 0) + (parts.forelimbs.stats.attack ?? 0)
+      + (parts.tail?.stats?.attack ?? 0) + (parts.body.stats.attack ?? 0) + (parts.hindlimbs.stats.attack ?? 0);
+    const totalDef = (parts.body.stats.defense ?? 0) + (parts.head.stats.defense ?? 0);
+    const totalHp  = parts.body.stats.health ?? 0;
+
+    const maxAtk = 50; const maxDef = 20; const maxHp = 80;
+
+    // Collect unique abilities from all slots
+    const abilitySet = new Set<string>();
+    for (const part of Object.values(parts)) {
+      if (part?.ability) abilitySet.add(part.ability);
+    }
+    const abilities = [...abilitySet].join(", ");
+
+    return el("div", { class: "bestiary-card" }, [
+      el("div", { class: "bestiary-card-emoji" }, [animal.emoji]),
+      el("div", { class: "bestiary-card-name" }, [animal.name]),
+      el("div", { class: "bestiary-card-tier" }, ["★".repeat(animal.tier)]),
+      el("div", { class: "bestiary-stat-bar-row" }, [
+        el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalAtk / maxAtk * 48)}px;background:#c85030;`, title: `Attack: ${totalAtk}` }, []),
+        el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalDef / maxDef * 24)}px;background:#3070c8;`, title: `Defense: ${totalDef}` }, []),
+        el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalHp  / maxHp  * 32)}px;background:#30a850;`, title: `Health: ${totalHp}` }, []),
+      ]),
+      ...(abilities ? [el("div", { class: "bestiary-abilities" }, [abilities])] : []),
+    ]);
+  });
+
+  app.append(
+    el("div", { class: "bestiary-screen" }, [
+      el("div", { style: "display:flex;align-items:center;gap:12px;margin-bottom:8px;" }, [
+        el("button", { class: "settings-btn", onclick: () => renderLab() }, ["← Back"]),
+        el("h2", { style: "color:#c8a84b;font-size:18px;margin:0;" }, ["📖 Bestiary"]),
+        el("span", { style: "color:#556677;font-size:13px;" }, [`${state.unlocked.length}/${ANIMALS.length} species unlocked`]),
+      ]),
+      el("div", { class: "bestiary-grid" }, cards),
+    ]),
+  );
 }
 
 function renderLab() {
