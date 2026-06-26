@@ -194,11 +194,11 @@ export const ANIMALS: Animal[] = [
     emoji: "🐉",
     tier: 3,
     parts: {
-      head: { stats: { attack: 18, energy: 10 }, ability: "spit", trait: "predator" },
-      body: { stats: { health: 58, defense: 10 }, ability: "frenzy", trait: "hardy" },
-      forelimbs: { stats: { attack: 16, energy: 6 }, ability: "charge" },
-      hindlimbs: { stats: { speed: 10 }, trait: "swift" },
-      tail: { stats: { attack: 12, energy: 8 }, ability: "shock" },
+      head: { stats: { attack: 14, energy: 8 }, ability: "spit", trait: "predator" },
+      body: { stats: { health: 52, defense: 8 }, ability: "frenzy", trait: "hardy" },
+      forelimbs: { stats: { attack: 12, energy: 5 }, ability: "charge" },
+      hindlimbs: { stats: { speed: 8 } },
+      tail: { stats: { attack: 10, energy: 6 }, ability: "shock" },
     },
   },
   {
