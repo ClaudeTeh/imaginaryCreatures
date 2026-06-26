@@ -21,13 +21,47 @@ export function applyToonStyle(
   group: THREE.Group,
   fill: string,
   gradientMap: THREE.DataTexture,
+  rimColorHex?: string,
 ): THREE.Group {
   group.traverse((node) => {
     if (node instanceof THREE.Mesh) {
-      node.material = new THREE.MeshToonMaterial({
+      const mat = new THREE.MeshToonMaterial({
         color: new THREE.Color(fill),
         gradientMap,
       });
+
+      const rim = rimColorHex || fill;
+      mat.userData = {
+        rimColor: { value: new THREE.Color(rim) },
+        rimPower: { value: 3.5 },
+        rimIntensity: { value: 0.65 },
+      };
+
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.rimColor = mat.userData.rimColor;
+        shader.uniforms.rimPower = mat.userData.rimPower;
+        shader.uniforms.rimIntensity = mat.userData.rimIntensity;
+
+        shader.fragmentShader = `
+          uniform vec3 rimColor;
+          uniform float rimPower;
+          uniform float rimIntensity;
+        ` + shader.fragmentShader;
+
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <dithering_fragment>',
+          `
+          #include <dithering_fragment>
+          vec3 viewDir = normalize(vViewPosition);
+          vec3 normalVal = normalize(vNormal);
+          float rimDot = 1.0 - max(dot(normalVal, -viewDir), 0.0);
+          float rimIntensityVal = pow(rimDot, rimPower);
+          gl_FragColor.rgb += rimColor * rimIntensityVal * rimIntensity;
+          `
+        );
+      };
+
+      node.material = mat;
       node.castShadow = true;
     }
   });

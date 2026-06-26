@@ -15,6 +15,7 @@ import type { Creature3DHandle } from "./render/creature3d";
 import { initAudio, setMuted, sfxLose, sfxWin, toggleMuted } from "./render/sound";
 import { BODY_TYPE } from "./combat/typeChart";
 import { ABILITIES } from "./data/abilities";
+import { playSpliceSequence } from "./render/spliceSequence";
 
 let state: GameState = load();
 let cancelArena: (() => void) | null = null;
@@ -134,7 +135,9 @@ function doSplice() {
   const child = breed(state.player, mate, makeRng(Date.now() >>> 1), {
     pool: state.unlocked,
   });
-  setGenome(child);
+  playSpliceSequence(document.body, state.player, mate, child, () => {
+    setGenome(child);
+  });
 }
 
 function topbar(): HTMLElement {

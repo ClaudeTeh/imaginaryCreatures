@@ -184,6 +184,10 @@ export function playBattle(
   let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
   let slowMoTimer = 0;
   let victoryTimer = 0;
+  let cameraVelocity = new THREE.Vector3();
+  let cameraLookAtVelocity = new THREE.Vector3();
+  let cameraCurrentPos = new THREE.Vector3(0, 14, 22);
+  let cameraCurrentLookAt = new THREE.Vector3(0, 1.2, 0);
   let stopMusic: () => void = () => {};
   let stopAmbient: () => void = () => {};
 
@@ -261,6 +265,7 @@ export function playBattle(
 
   let hudOverlay: HTMLElement | null = null;
   let vignetteEl: HTMLDivElement | null = null;
+  let biomeVignetteEl: HTMLDivElement | null = null;
   let statusBarA: HTMLDivElement | null = null;
   let statusBarB: HTMLDivElement | null = null;
   let speedLinesCanvas: HTMLCanvasElement | null = null;
@@ -545,7 +550,22 @@ export function playBattle(
     keyLight.shadow.mapSize.height = 1024;
     scene3D.add(keyLight);
 
-    rimLight = new THREE.DirectionalLight(0x9b6cff, 0.8);
+    const biomeName =
+      biome.particleKind === "leaf"    ? "forest" :
+      biome.particleKind === "streak"  ? "sky" :
+      biome.particleKind === "bubble"  ? "ocean" :
+      biome.particleKind === "ember"   ? "volcano" : "desert";
+
+    const biomeRimColors: Record<string, number> = {
+      forest: 0x6ce5b1,
+      ocean: 0x20c0a0,
+      volcano: 0xff6020,
+      desert: 0xffd700,
+      sky: 0x7aa2ff,
+    };
+    const rimColorHexVal = biomeRimColors[biomeName] ?? 0x9b6cff;
+
+    rimLight = new THREE.DirectionalLight(rimColorHexVal, 0.9);
     rimLight.position.set(6, 4, -6);
     scene3D.add(rimLight);
 
@@ -558,7 +578,7 @@ export function playBattle(
     const rayCount = 3;
     const rayGeo = new THREE.CylinderGeometry(0.3, 1.2, 14, 16, 1, true);
     const rayMat = new THREE.MeshBasicMaterial({
-      color: 0x7aa2ff,
+      color: new THREE.Color(biome.particleColor),
       transparent: true,
       opacity: 0.12,
       blending: THREE.AdditiveBlending,
@@ -574,26 +594,220 @@ export function playBattle(
       scene3D.add(ray);
     }
 
-    // Arena Floor
+    // Arena Floor Custom Redesign
     arenaGroup = new THREE.Group();
-    const platGeo = new THREE.CylinderGeometry(10, 10.5, 0.8, 64);
-    platMat = new THREE.MeshStandardMaterial({ color: biome.floorHex, metalness: 0.8, roughness: 0.3 });
-    platform = new THREE.Mesh(platGeo, platMat);
-    platform.position.y = -0.4;
-    platform.receiveShadow = true;
-    arenaGroup.add(platform);
 
-    ringGeo = new THREE.TorusGeometry(10.2, 0.1, 16, 64);
-    ringMat = new THREE.MeshStandardMaterial({
-      color: 0x7aa2ff,
-      emissive: 0x7aa2ff,
-      emissiveIntensity: 1.2,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.01;
-    arenaGroup.add(ring);
-    scene3D.add(arenaGroup);
+    if (biomeName === "forest") {
+      // Mossy Stone Platform
+      platMat = new THREE.MeshStandardMaterial({
+        color: 0x1a2818,
+        roughness: 0.95,
+        metalness: 0.05
+      });
+      const platGeo = new THREE.CylinderGeometry(10, 10.4, 0.8, 64);
+      platform = new THREE.Mesh(platGeo, platMat);
+      platform.position.y = -0.4;
+      platform.receiveShadow = true;
+      arenaGroup.add(platform);
+
+      // Glowing emerald rune ring
+      ringGeo = new THREE.TorusGeometry(9.8, 0.08, 12, 64);
+      ringMat = new THREE.MeshStandardMaterial({
+        color: 0x39ff14,
+        emissive: 0x39ff14,
+        emissiveIntensity: 2.0,
+        roughness: 0.2
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.01;
+      arenaGroup.add(ring);
+
+      // Add mossy pillars/ruins around the edge
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x2e3b27, roughness: 0.9 });
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const x = Math.cos(angle) * 9.6;
+        const z = Math.sin(angle) * 9.6;
+        const h = 0.5 + Math.random() * 0.8;
+        const stone = new THREE.Mesh(new THREE.BoxGeometry(0.8, h, 0.8), rockMat);
+        stone.position.set(x, h / 2 - 0.4, z);
+        stone.rotation.y = Math.random() * Math.PI;
+        stone.castShadow = true;
+        stone.receiveShadow = true;
+        arenaGroup.add(stone);
+      }
+    } 
+    else if (biomeName === "sky") {
+      // High-Tech Cybernetic Metallic Platform
+      platMat = new THREE.MeshStandardMaterial({
+        color: 0x181a24,
+        roughness: 0.15,
+        metalness: 0.95
+      });
+      const platGeo = new THREE.CylinderGeometry(10, 10.2, 0.8, 64);
+      platform = new THREE.Mesh(platGeo, platMat);
+      platform.position.y = -0.4;
+      platform.receiveShadow = true;
+      arenaGroup.add(platform);
+
+      // Outer laser ring
+      ringGeo = new THREE.TorusGeometry(10.1, 0.06, 8, 64);
+      ringMat = new THREE.MeshStandardMaterial({
+        color: 0x00d8ff,
+        emissive: 0x00d8ff,
+        emissiveIntensity: 2.2,
+        roughness: 0.1
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.01;
+      arenaGroup.add(ring);
+
+      // Concentric inner circuit ring
+      const innerRingGeo = new THREE.TorusGeometry(7.5, 0.03, 8, 64);
+      const innerRingMat = new THREE.MeshStandardMaterial({
+        color: 0x7aa2ff,
+        emissive: 0x7aa2ff,
+        emissiveIntensity: 1.5,
+        roughness: 0.1
+      });
+      const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+      innerRing.rotation.x = Math.PI / 2;
+      innerRing.position.y = 0.01;
+      arenaGroup.add(innerRing);
+
+      // Glowing core pattern (hologram rings below fighters)
+      for (const s of [-4.0, 4.0]) {
+        const padGeo = new THREE.TorusGeometry(1.6, 0.04, 8, 32);
+        const padMat = new THREE.MeshStandardMaterial({
+          color: 0x00ffff,
+          emissive: 0x00ffff,
+          emissiveIntensity: 1.8
+        });
+        const pad = new THREE.Mesh(padGeo, padMat);
+        pad.rotation.x = Math.PI / 2;
+        pad.position.set(s, 0.015, s === -4.0 ? 0.5 : -0.5);
+        arenaGroup.add(pad);
+      }
+    } 
+    else if (biomeName === "ocean") {
+      // Aqua Translucent Glass Platform
+      platMat = new THREE.MeshStandardMaterial({
+        color: 0x07283c,
+        roughness: 0.05,
+        metalness: 0.8,
+        transparent: true,
+        opacity: 0.85
+      });
+      const platGeo = new THREE.CylinderGeometry(10, 10.4, 0.8, 64);
+      platform = new THREE.Mesh(platGeo, platMat);
+      platform.position.y = -0.4;
+      platform.receiveShadow = true;
+      arenaGroup.add(platform);
+
+      // Glowing coral ring
+      ringGeo = new THREE.TorusGeometry(9.9, 0.08, 12, 64);
+      ringMat = new THREE.MeshStandardMaterial({
+        color: 0x20c0a0,
+        emissive: 0x20c0a0,
+        emissiveIntensity: 1.8,
+        roughness: 0.1
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.01;
+      arenaGroup.add(ring);
+
+      // Deep glowing rings inside/under the glass
+      const deepRingGeo = new THREE.TorusGeometry(8.0, 0.15, 8, 48);
+      const deepRingMat = new THREE.MeshBasicMaterial({
+        color: 0x007788,
+        transparent: true,
+        opacity: 0.55
+      });
+      const deepRing = new THREE.Mesh(deepRingGeo, deepRingMat);
+      deepRing.rotation.x = Math.PI / 2;
+      deepRing.position.y = -0.3;
+      arenaGroup.add(deepRing);
+    } 
+    else if (biomeName === "volcano") {
+      // Obsidian Basalt Platform
+      platMat = new THREE.MeshStandardMaterial({
+        color: 0x141416,
+        roughness: 0.85,
+        metalness: 0.1
+      });
+      const platGeo = new THREE.CylinderGeometry(10, 10.5, 0.8, 64);
+      platform = new THREE.Mesh(platGeo, platMat);
+      platform.position.y = -0.4;
+      platform.receiveShadow = true;
+      arenaGroup.add(platform);
+
+      // Lava border ring
+      ringGeo = new THREE.TorusGeometry(10.0, 0.08, 12, 64);
+      ringMat = new THREE.MeshStandardMaterial({
+        color: 0xff3b00,
+        emissive: 0xff3b00,
+        emissiveIntensity: 2.5,
+        roughness: 0.2
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.01;
+      arenaGroup.add(ring);
+
+      // Pulsing lava veins on the floor (thin boxes lying flat)
+      const veinMat = new THREE.MeshStandardMaterial({
+        color: 0xff5500,
+        emissive: 0xff5500,
+        emissiveIntensity: 2.0
+      });
+      for (let i = 0; i < 4; i++) {
+        const veinGeo = new THREE.BoxGeometry(7.0, 0.02, 0.15);
+        const vein = new THREE.Mesh(veinGeo, veinMat);
+        vein.rotation.y = (i * Math.PI) / 4;
+        vein.position.set(0, 0.012, 0);
+        arenaGroup.add(vein);
+      }
+    } 
+    else {
+      // Sandstone Desert Pedestal
+      platMat = new THREE.MeshStandardMaterial({
+        color: 0x3d3020,
+        roughness: 0.9,
+        metalness: 0.0
+      });
+      const platGeo = new THREE.CylinderGeometry(10, 10.5, 0.8, 64);
+      platform = new THREE.Mesh(platGeo, platMat);
+      platform.position.y = -0.4;
+      platform.receiveShadow = true;
+      arenaGroup.add(platform);
+
+      // Sandstone golden border ring
+      ringGeo = new THREE.TorusGeometry(10.0, 0.08, 12, 64);
+      ringMat = new THREE.MeshStandardMaterial({
+        color: 0xffae19,
+        emissive: 0xffae19,
+        emissiveIntensity: 1.6,
+        roughness: 0.3
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.01;
+      arenaGroup.add(ring);
+
+      // Concentric inner sandstone steps
+      const innerPlatGeo = new THREE.CylinderGeometry(8.2, 8.4, 0.3, 48);
+      const innerPlatMat = new THREE.MeshStandardMaterial({
+        color: 0x4a3b27,
+        roughness: 0.95
+      });
+      const innerPlat = new THREE.Mesh(innerPlatGeo, innerPlatMat);
+      innerPlat.position.y = -0.15;
+      innerPlat.receiveShadow = true;
+      arenaGroup.add(innerPlat);
+    }
 
     // Biome floor rings — decorative concentric glowing rings on the platform
     floorRings = [];
@@ -618,11 +832,6 @@ export function playBattle(
 
     spawnBiomeParticles(scene3D, biome);
 
-    const biomeName =
-      biome.particleKind === "leaf"    ? "forest" :
-      biome.particleKind === "streak"  ? "sky" :
-      biome.particleKind === "bubble"  ? "ocean" :
-      biome.particleKind === "ember"   ? "volcano" : "desert";
     stopMusic = startBattleMusic(biomeName);
     stopAmbient = startBiomeAmbient(biomeName);
 
@@ -684,30 +893,23 @@ export function playBattle(
     // Setup HUD HTML Overlay
     hudOverlay = document.createElement("div");
     hudOverlay.className = "arena-hud-overlay";
-    hudOverlay.style.position = "absolute";
-    hudOverlay.style.top = "20px";
-    hudOverlay.style.left = "0";
-    hudOverlay.style.right = "0";
-    hudOverlay.style.pointerEvents = "none";
-    hudOverlay.style.display = "flex";
-    hudOverlay.style.justifyContent = "space-between";
-    hudOverlay.style.padding = "0 40px";
-    hudOverlay.style.fontFamily = "Inter, system-ui, sans-serif";
     
     hudOverlay.innerHTML = `
-      <div class="hud-bar player-hud" style="background: rgba(12,18,34,0.85); border: 1px solid rgba(122,162,255,0.25); border-radius: 12px; padding: 12px 20px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); backdrop-filter: blur(8px);">
-        <div class="hud-name" style="font-weight: 700; font-size: 15px; color: #e7ecf7; margin-bottom: 6px;">${sa.name}</div>
-        <div class="hud-hp-bg" style="background: #0c1222; border-radius: 9px; height: 18px; overflow: hidden; width: 100%;">
-          <div class="hud-hp-fill" style="background: linear-gradient(90deg, #36c08a, #6ce5b1); height: 100%; width: 100%; transition: width 0.2s ease;"></div>
+      <div class="hud-bar player-hud">
+        <div class="hud-name">${sa.name}</div>
+        <div class="hud-hp-bg">
+          <div class="hud-hp-lag"></div>
+          <div class="hud-hp-fill"></div>
         </div>
-        <div class="hud-text" style="font-size: 12px; color: #93a0bd; margin-top: 4px; text-align: right;">${sa.maxHp}/${sa.maxHp}</div>
+        <div class="hud-text">${sa.maxHp}/${sa.maxHp}</div>
       </div>
-      <div class="hud-bar opponent-hud" style="background: rgba(12,18,34,0.85); border: 1px solid rgba(122,162,255,0.25); border-radius: 12px; padding: 12px 20px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); backdrop-filter: blur(8px);">
-        <div class="hud-name" style="font-weight: 700; font-size: 15px; color: #e7ecf7; margin-bottom: 6px; text-align: right;">${sb.name}</div>
-        <div class="hud-hp-bg" style="background: #0c1222; border-radius: 9px; height: 18px; overflow: hidden; width: 100%;">
-          <div class="hud-hp-fill" style="background: linear-gradient(90deg, #36c08a, #6ce5b1); height: 100%; width: 100%; transition: width 0.2s ease;"></div>
+      <div class="hud-bar opponent-hud">
+        <div class="hud-name">${sb.name}</div>
+        <div class="hud-hp-bg">
+          <div class="hud-hp-lag"></div>
+          <div class="hud-hp-fill"></div>
         </div>
-        <div class="hud-text" style="font-size: 12px; color: #93a0bd; margin-top: 4px; text-align: left;">${sb.maxHp}/${sb.maxHp}</div>
+        <div class="hud-text">${sb.maxHp}/${sb.maxHp}</div>
       </div>
     `;
     canvas.parentElement?.style.setProperty("position", "relative");
@@ -724,6 +926,10 @@ export function playBattle(
     vignetteEl.className = "hp-vignette";
     vignetteEl.style.opacity = "0";
     hudOverlay.appendChild(vignetteEl);
+
+    biomeVignetteEl = document.createElement("div");
+    biomeVignetteEl.className = `biome-vignette biome-${biomeName}`;
+    canvas.parentElement?.appendChild(biomeVignetteEl);
 
     speedLinesCanvas = document.createElement("canvas");
     speedLinesCanvas.width = W;
@@ -806,8 +1012,10 @@ export function playBattle(
       if (frame < introDuration) {
         const tIntro = frame / introDuration;
         const ease = tIntro * (2 - tIntro);
-        camera3D.position.set(0, 14 - ease * 6.5, 22 - ease * 7.5);
-        camera3D.lookAt(0, 1.2, 0);
+        cameraCurrentPos.set(0, 14 - ease * 6.5, 22 - ease * 7.5);
+        cameraCurrentLookAt.set(0, 1.2, 0);
+        camera3D.position.copy(cameraCurrentPos);
+        camera3D.lookAt(cameraCurrentLookAt);
         if (speedLinesCanvas) speedLinesCanvas.style.display = "none";
       } else if (cinematic.active) {
         cinematic.timer++;
@@ -818,8 +1026,10 @@ export function playBattle(
         const targetCamPos = caster.basePos.clone().add(new THREE.Vector3(cinematic.casterSide === "a" ? 2.5 : -2.5, 2.2, 5.0));
         const targetLookAt = caster.basePos.clone().add(new THREE.Vector3(0, 1.4, 0));
         
-        camera3D.position.lerp(targetCamPos, 0.12);
-        camera3D.lookAt(new THREE.Vector3(0, 1.2, 0).lerp(targetLookAt, 0.5));
+        cameraCurrentPos.lerp(targetCamPos, 0.12);
+        cameraCurrentLookAt.lerp(targetLookAt, 0.12);
+        camera3D.position.copy(cameraCurrentPos);
+        camera3D.lookAt(cameraCurrentLookAt);
 
         // Draw radial speed lines to amplify velocity
         if (speedLinesCanvas) {
@@ -865,8 +1075,47 @@ export function playBattle(
           targetLookAt.add(new THREE.Vector3(-0.5, 0, 0));
         }
 
-        camera3D.position.lerp(targetCamPos, 0.08);
-        camera3D.lookAt(targetLookAt);
+        // Close-up Zoom targeting defender on critical hit slow-mo
+        if (slowMoTimer > 0) {
+          const defSide = (actA === "strike" || actA === "recover") ? "b" : "a";
+          const defender = fighters3D[defSide];
+          targetCamPos.copy(defender.model.position).add(new THREE.Vector3(defSide === "b" ? -3.2 : 3.2, 1.5, 3.2));
+          targetLookAt.copy(defender.model.position).add(new THREE.Vector3(0, 1.0, 0));
+        }
+
+        // Idle breathing drift: bob/sway camera slightly when not zoomed or lunging
+        if (slowMoTimer === 0 && actA === "idle" && actB === "idle" && victoryTimer === 0) {
+          targetCamPos.y += Math.sin(t * 1.5) * 0.15;
+          targetCamPos.x += Math.cos(t * 0.8) * 0.1;
+        }
+
+        // Victory spin: slow circular pan around the winner
+        if (victoryTimer > 0) {
+          const winningSide = result.winner as Side;
+          const winner3D = fighters3D[winningSide];
+          const angle = victoryTimer * 0.04;
+          targetCamPos.copy(winner3D.model.position).add(new THREE.Vector3(Math.cos(angle) * 4.5, 1.8, Math.sin(angle) * 4.5));
+          targetLookAt.copy(winner3D.model.position).add(new THREE.Vector3(0, 1.2, 0));
+        }
+
+        // Apply spring equations
+        const springStrength = 0.085;
+        const springDamping = 0.75;
+
+        // Position spring
+        const posDiff = new THREE.Vector3().subVectors(targetCamPos, cameraCurrentPos);
+        const posAcc = posDiff.multiplyScalar(springStrength);
+        cameraVelocity.add(posAcc).multiplyScalar(springDamping);
+        cameraCurrentPos.add(cameraVelocity);
+
+        // LookAt spring
+        const lookDiff = new THREE.Vector3().subVectors(targetLookAt, cameraCurrentLookAt);
+        const lookAcc = lookDiff.multiplyScalar(springStrength);
+        cameraLookAtVelocity.add(lookAcc).multiplyScalar(springDamping);
+        cameraCurrentLookAt.add(cameraLookAtVelocity);
+
+        camera3D.position.copy(cameraCurrentPos);
+        camera3D.lookAt(cameraCurrentLookAt);
 
         // Restore lighting
         ambientLight!.intensity += (0.9 - ambientLight!.intensity) * 0.1;
@@ -1660,16 +1909,20 @@ export function playBattle(
       // Update HUD Overlay widths & texts
       if (hudOverlay) {
         const pFill = hudOverlay.querySelector(".player-hud .hud-hp-fill") as HTMLElement;
+        const pLag = hudOverlay.querySelector(".player-hud .hud-hp-lag") as HTMLElement;
         const pText = hudOverlay.querySelector(".player-hud .hud-text") as HTMLElement;
         const pPct = Math.max(0, fighters.a.displayHp) / fighters.a.maxHp * 100;
         pFill.style.width = `${pPct}%`;
+        if (pLag) pLag.style.width = `${pPct}%`;
         pFill.style.background = pPct > 30 ? "linear-gradient(90deg, #36c08a, #6ce5b1)" : "linear-gradient(90deg, #ff6b81, #ff97a6)";
         pText.textContent = `${Math.max(0, Math.round(fighters.a.displayHp))}/${fighters.a.maxHp}`;
 
         const oFill = hudOverlay.querySelector(".opponent-hud .hud-hp-fill") as HTMLElement;
+        const oLag = hudOverlay.querySelector(".opponent-hud .hud-hp-lag") as HTMLElement;
         const oText = hudOverlay.querySelector(".opponent-hud .hud-text") as HTMLElement;
         const oPct = Math.max(0, fighters.b.displayHp) / fighters.b.maxHp * 100;
         oFill.style.width = `${oPct}%`;
+        if (oLag) oLag.style.width = `${oPct}%`;
         oFill.style.background = oPct > 30 ? "linear-gradient(90deg, #36c08a, #6ce5b1)" : "linear-gradient(90deg, #ff6b81, #ff97a6)";
         oText.textContent = `${Math.max(0, Math.round(fighters.b.displayHp))}/${fighters.b.maxHp}`;
       }
@@ -2161,6 +2414,16 @@ export function playBattle(
     });
   };
 
+  const triggerHudShake = (targetSide: Side) => {
+    const selector = targetSide === "a" ? ".player-hud" : ".opponent-hud";
+    const barEl = hudOverlay?.querySelector(selector);
+    if (barEl) {
+      barEl.classList.remove("hud-shake");
+      void barEl.getBoundingClientRect(); // trigger reflow
+      barEl.classList.add("hud-shake");
+    }
+  };
+
   function executeAbilityVFX(e: Extract<BattleEvent, { kind: "ability" }>) {
     const foe = fighters[other(e.by)];
     const atk3D = fighters3D![e.by];
@@ -2187,6 +2450,7 @@ export function playBattle(
           foe3D.shake = 1.0;
           foe3D.flash = 1.0;
           foe.targetHp = e.targetHp;
+          triggerHudShake(other(e.by));
           camShake = Math.max(camShake, 0.8);
           spawnBurst3D(foe3D.model.position, "#39ff14", 15, 0.15);
           spawnImpactRing3D(foe3D.model.position, "#39ff14");
@@ -2203,6 +2467,7 @@ export function playBattle(
       foe3D.shake = 1.2;
       foe3D.flash = 1.0;
       foe.targetHp = e.targetHp;
+      triggerHudShake(other(e.by));
       camShake = Math.max(camShake, 0.9);
       spawnBurst3D(foe3D.model.position, "#c39bff", 15, 0.16);
       spawnImpactRing3D(foe3D.model.position, "#c39bff");
@@ -2218,6 +2483,7 @@ export function playBattle(
       foe3D.shake = 1.0;
       foe3D.flash = 1.0;
       foe.targetHp = e.targetHp;
+      triggerHudShake(other(e.by));
       camShake = Math.max(camShake, 0.7);
       spawnBurst3D(foe3D.model.position, "#ff3b30", 12, 0.12);
       spawnImpactRing3D(foe3D.model.position, "#ff3b30");
@@ -2229,6 +2495,7 @@ export function playBattle(
         foe3D.shake = 1.4;
         foe3D.flash = 1.0;
         foe.targetHp = e.targetHp;
+        triggerHudShake(other(e.by));
         camShake = Math.max(camShake, 1.2);
         spawnBurst3D(foe3D.model.position, "#ffae19", 18, 0.22);
         spawnImpactRing3D(foe3D.model.position, "#ffae19");
@@ -2282,6 +2549,7 @@ export function playBattle(
             foe3D.shake = e.crit ? 1.0 : 0.6;
             foe3D.flash = 1.0;
             foe.targetHp = e.targetHp;
+            triggerHudShake(other(e.by));
             camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
             if (e.crit) {
               slowMoTimer = 35;
@@ -2682,6 +2950,9 @@ export function playBattle(
       if (speedLinesCanvas) {
         speedLinesCanvas.remove();
       }
+      if (biomeVignetteEl) {
+        biomeVignetteEl.remove();
+      }
       for (let i = 0; i < 3; i++) {
         const ray = scene3D?.getObjectByName(`light_ray_${i}`);
         if (ray instanceof THREE.Mesh) {
@@ -2706,10 +2977,20 @@ export function playBattle(
       }
       if (arenaGroup && scene3D) {
         scene3D.remove(arenaGroup);
-        platform?.geometry.dispose();
-        platMat?.dispose();
-        ringGeo?.dispose();
-        ringMat?.dispose();
+        arenaGroup.traverse((node) => {
+          if (node instanceof THREE.Mesh) {
+            node.geometry.dispose();
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => m.dispose());
+            } else if (node.material) {
+              node.material.dispose();
+            }
+          }
+        });
+        platform = null;
+        platMat = null;
+        ringGeo = null;
+        ringMat = null;
       }
       activeParticles3D.forEach(p => {
         scene3D?.remove(p.mesh);

@@ -409,22 +409,32 @@ function getProceduralTexture(animalId: string, baseHex: string, accentHex: stri
   return tex;
 }
 
-function applyToonOutline(mesh: THREE.Mesh, width = 0.04) {
+function applyToonOutline(mesh: THREE.Mesh, width = 0.02) {
   if (!mesh.geometry) return;
   if (mesh.getObjectByName("toon_outline")) return;
   const outlineGeo = mesh.geometry.clone();
-  const outlineMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0x0a0a14),
+  const outlineMat = new THREE.ShaderMaterial({
+    uniforms: {
+      outlineThickness: { value: width },
+      outlineColor: { value: new THREE.Color(0x0a0a14) },
+    },
+    vertexShader: `
+      uniform float outlineThickness;
+      void main() {
+        vec3 pos = position + normal * outlineThickness;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 outlineColor;
+      void main() {
+        gl_FragColor = vec4(outlineColor, 1.0);
+      }
+    `,
     side: THREE.BackSide,
   });
   const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
   outlineMesh.name = "toon_outline";
-
-  outlineGeo.computeBoundingSphere();
-  const radius = outlineGeo.boundingSphere ? outlineGeo.boundingSphere.radius : 1.0;
-  const r = Math.max(0.05, radius);
-  const inflationFactor = 1.0 + (width / r);
-  outlineMesh.scale.setScalar(inflationFactor);
   mesh.add(outlineMesh);
 }
 
@@ -458,13 +468,47 @@ function mat(
     emissiveIntensity: opts.emissiveI ?? 0,
   };
 
+  const c = colorsFor(currentBuilderAnimalId || "boar");
+  const rimColorHex = c.accent || c.shade || "#7aa2ff";
+
   if (currentBuilderAnimalId && !opts.noTexture) {
-    const c = colorsFor(currentBuilderAnimalId);
     params.map = getProceduralTexture(currentBuilderAnimalId, hex, c.accent || c.shade);
     params.color = new THREE.Color(0xffffff);
   }
 
-  return new THREE.MeshToonMaterial(params);
+  const material = new THREE.MeshToonMaterial(params);
+
+  material.userData = {
+    rimColor: { value: new THREE.Color(rimColorHex) },
+    rimPower: { value: 3.5 },
+    rimIntensity: { value: 0.65 },
+  };
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.rimColor = material.userData.rimColor;
+    shader.uniforms.rimPower = material.userData.rimPower;
+    shader.uniforms.rimIntensity = material.userData.rimIntensity;
+
+    shader.fragmentShader = `
+      uniform vec3 rimColor;
+      uniform float rimPower;
+      uniform float rimIntensity;
+    ` + shader.fragmentShader;
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `
+      #include <dithering_fragment>
+      vec3 viewDir = normalize(vViewPosition);
+      vec3 normalVal = normalize(vNormal);
+      float rimDot = 1.0 - max(dot(normalVal, -viewDir), 0.0);
+      float rimIntensityVal = pow(rimDot, rimPower);
+      gl_FragColor.rgb += rimColor * rimIntensityVal * rimIntensity;
+      `
+    );
+  };
+
+  return material;
 }
 
 function sphere(
@@ -572,7 +616,8 @@ function buildBody(animalId: string): THREE.Group {
   const cached = getModelPart(animalId, "body");
   if (cached) {
     const g = cached.clone();
-    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
+    const c = colorsFor(animalId);
+    applyToonStyle(g, c.fill, getToonGradientMap(), c.accent || c.shade);
     fitToBox(g, PART_TARGET_SIZE.body);
     return g;
   }
@@ -719,7 +764,8 @@ function buildHead(animalId: string): THREE.Group {
   const cached = getModelPart(animalId, "head");
   if (cached) {
     const g = cached.clone();
-    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
+    const c = colorsFor(animalId);
+    applyToonStyle(g, c.fill, getToonGradientMap(), c.accent || c.shade);
     fitToBox(g, PART_TARGET_SIZE.head);
     return g;
   }
