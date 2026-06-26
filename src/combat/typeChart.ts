@@ -18,6 +18,8 @@ export const BODY_TYPE: Record<string, string> = {
   crab:     "electric",
   rabbit:   "electric",
   gecko:    "electric",
+  panther:  "nature",
+  mantis:   "air",
 };
 
 // Multiplier when attacker's type hits defender's type

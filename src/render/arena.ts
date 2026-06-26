@@ -134,8 +134,8 @@ export function getBiome(bodyId: string): BiomeConfig {
     particleKind: "dust",
   };
 
-  const FOREST_IDS = new Set(["wolf", "bear", "gorilla", "tiger"]);
-  const SKY_IDS = new Set(["eagle", "dragon"]);
+  const FOREST_IDS = new Set(["wolf", "bear", "gorilla", "tiger", "panther"]);
+  const SKY_IDS = new Set(["eagle", "dragon", "mantis"]);
   const OCEAN_IDS = new Set(["cobra", "eel", "jellyfish"]);
   const VOLCANO_IDS = new Set(["rhino", "boar", "scorpion"]);
 

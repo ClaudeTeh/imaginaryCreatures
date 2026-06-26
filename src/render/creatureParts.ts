@@ -36,6 +36,8 @@ export const ANIMAL_COLORS: Record<string, PartColors> = {
   tiger:    { fill: '#c86008', shade: '#6c2e00', accent: '#f0a828' },
   dragon:   { fill: '#7c1010', shade: '#3c0808', accent: '#ff6030' },
   jellyfish:{ fill: '#3c1870', shade: '#1c0840', accent: '#b060ff' },
+  panther:  { fill: '#1a1a2e', shade: '#0d0d18', accent: '#9060e0' },
+  mantis:   { fill: '#3a7c20', shade: '#1e4410', accent: '#a0e840' },
 };
 
 // ─── shared helpers ───────────────────────────────────────────────────────────
