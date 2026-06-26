@@ -1,12 +1,13 @@
 import { chance, type RNG } from "../core/rng";
 import type { AbilityId, Creature } from "../core/types";
 import { ABILITIES } from "../data/abilities";
+import { typeMultiplier } from "./typeChart";
 
 export type Side = "a" | "b";
 
 export type BattleEvent =
   | { t: number; kind: "start"; side: Side; maxHp: number; name: string; emoji: string; partEmojis: Record<string, string>; genome: Record<string, string> }
-  | { t: number; kind: "attack"; by: Side; dmg: number; crit: boolean; targetHp: number }
+  | { t: number; kind: "attack"; by: Side; dmg: number; crit: boolean; targetHp: number; typeMultiplier?: number }
   | { t: number; kind: "ability"; by: Side; ability: AbilityId; value: number; targetHp: number }
   | { t: number; kind: "poison"; on: Side; dmg: number; hp: number }
   | { t: number; kind: "heal"; on: Side; amount: number; hp: number }
@@ -81,7 +82,8 @@ function effSpeed(f: Fighter): number {
 }
 
 function basicDamage(att: Fighter, def: Fighter): number {
-  return Math.max(1, Math.round(att.attack - effDefense(def) * 0.4));
+  const mult = typeMultiplier(att.genome.body ?? "", def.genome.body ?? "");
+  return Math.max(1, Math.round((att.attack - effDefense(def) * 0.4) * mult));
 }
 
 /** Simulate a full battle deterministically. Same inputs → identical log. */
@@ -154,6 +156,7 @@ export function simulateBattle(ca: Creature, cb: Creature, rng: RNG): BattleResu
           dmg,
           crit,
           targetHp: Math.max(0, Math.round(foe.hp)),
+          typeMultiplier: typeMultiplier(self.genome.body ?? "", foe.genome.body ?? ""),
         });
       }
     }
