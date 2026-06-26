@@ -1,10 +1,10 @@
 import "./styles.css";
 import { makeRng } from "./core/rng";
-import { SLOTS, type Genome } from "./core/types";
+import { SLOTS, type Animal, type Genome, type Slot } from "./core/types";
 import { simulateBattle, type Side } from "./combat/combat";
 import { ANIMALS, getAnimal } from "./data/animals";
 import { breed, randomGenome } from "./genome/breed";
-import { buildCreature, powerRating, slotLabel } from "./genome/genome";
+import { buildCreature, powerRating, pureGenome, slotLabel } from "./genome/genome";
 import { makeOpponent } from "./game/opponents";
 import { load, newGame, save, unlockNext, type BattleSpeed, type GameState } from "./game/state";
 import { addToRoster, isInRoster, removeFromRoster } from "./game/roster";
@@ -224,6 +224,120 @@ function settingsBar(): HTMLElement {
   return row;
 }
 
+function buildSlotCards(slot: Slot): HTMLElement {
+  const row = el("div", { class: "slot-cards" }) as HTMLElement;
+  let activeTooltip: HTMLElement | null = null;
+
+  const removeTooltip = () => {
+    activeTooltip?.remove();
+    activeTooltip = null;
+  };
+
+  for (const a of ANIMALS) {
+    const isUnlocked = (state.unlocked as string[]).includes(a.id);
+    const isSelected = state.player[slot] === a.id;
+
+    const classes = [
+      "animal-card",
+      isSelected ? "selected" : "",
+      !isUnlocked ? "locked" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const card = el(
+      "div",
+      {
+        class: classes,
+        "data-slot": slot,
+        "data-animal-id": a.id,
+      },
+      [
+        el("span", { class: "card-emoji" }, [a.emoji]),
+        el("span", { class: "card-name" }, [a.name]),
+      ],
+    ) as HTMLElement;
+
+    if (isUnlocked) {
+      card.addEventListener("click", () => {
+        setGenome({ ...state.player, [slot]: a.id });
+      });
+
+      card.addEventListener("mouseenter", () => {
+        removeTooltip();
+        activeTooltip = buildTooltip(a, slot);
+        document.body.appendChild(activeTooltip);
+        positionTooltip(activeTooltip, card);
+        creature3d?.setGenome(pureGenome(a.id));
+      });
+
+      card.addEventListener("mouseleave", () => {
+        removeTooltip();
+        creature3d?.setGenome(state.player);
+      });
+    }
+
+    row.append(card);
+  }
+
+  return row;
+}
+
+function buildTooltip(a: Animal, slot: Slot): HTMLElement {
+  const part = a.parts[slot];
+  const stats = part.stats;
+  const lines: HTMLElement[] = [];
+
+  const statDefs: [keyof typeof stats, string][] = [
+    ["attack", "⚔ Attack"],
+    ["defense", "🛡 Defense"],
+    ["health", "❤ Health"],
+    ["speed", "⚡ Speed"],
+    ["energy", "✨ Energy"],
+  ];
+
+  for (const [key, label] of statDefs) {
+    const val = stats[key];
+    if (val !== undefined && val > 0) {
+      lines.push(
+        el("div", { class: "tip-stat" }, [
+          el("span", {}, [label]),
+          el("span", {}, [String(val)]),
+        ]) as HTMLElement,
+      );
+    }
+  }
+
+  if (part.ability || part.trait) {
+    lines.push(el("hr", { class: "tip-divider" }) as HTMLElement);
+  }
+  if (part.ability) {
+    lines.push(el("div", { class: "tip-ability" }, [`🌀 ${part.ability}`]) as HTMLElement);
+  }
+  if (part.trait) {
+    lines.push(el("div", { class: "tip-trait" }, [`✦ ${part.trait}`]) as HTMLElement);
+  }
+
+  return el("div", { class: "card-tooltip" }, lines) as HTMLElement;
+}
+
+function positionTooltip(tooltip: HTMLElement, anchor: HTMLElement): void {
+  const rect = anchor.getBoundingClientRect();
+  const TIP_H = 140;
+  const TIP_W = 140;
+
+  let top = rect.top - TIP_H - 8;
+  let left = rect.left + rect.width / 2 - TIP_W / 2;
+
+  if (top < 8) top = rect.bottom + 8;
+  if (left + TIP_W > window.innerWidth - 8) left = rect.right - TIP_W;
+  if (left < 8) left = 8;
+
+  tooltip.style.top = `${top}px`;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.width = `${TIP_W}px`;
+}
+
 function renderLab() {
   if (cancelArena) {
     cancelArena();
@@ -237,24 +351,12 @@ function renderLab() {
     el(
       "div",
       { class: "slots" },
-      SLOTS.map((slot) => {
-        const select = el("select", {
-          onchange: (e) => {
-            const next = { ...state.player, [slot]: (e.target as HTMLSelectElement).value };
-            setGenome(next);
-          },
-        }) as HTMLSelectElement;
-        for (const id of state.unlocked) {
-          const a = getAnimal(id);
-          const opt = el("option", { value: id }, [`${a.emoji}  ${a.name}`]);
-          if (state.player[slot] === id) (opt as HTMLOptionElement).selected = true;
-          select.append(opt);
-        }
-        return el("div", { class: "slot" }, [
+      SLOTS.map((slot) =>
+        el("div", { class: "slot" }, [
           el("label", {}, [slotLabel(slot)]),
-          select,
-        ]);
-      }),
+          buildSlotCards(slot),
+        ]),
+      ),
     ),
     el("div", { class: "btnrow" }, [
       el("button", { onclick: doRandomize }, ["🎲 Randomize"]),
@@ -305,6 +407,13 @@ function renderLab() {
   if (state.showOpponent) sections.push(opponentPanel(creature));
   sections.push(rosterPanel());
   app.append(...sections);
+
+  // Scroll each card row so the selected card is visible on first render
+  requestAnimationFrame(() => {
+    document.querySelectorAll<HTMLElement>(".animal-card.selected").forEach((card) => {
+      card.scrollIntoView({ block: "nearest", inline: "center" });
+    });
+  });
 }
 
 function opponentPanel(player: ReturnType<typeof buildCreature>): HTMLElement {
