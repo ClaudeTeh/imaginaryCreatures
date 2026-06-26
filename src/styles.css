@@ -605,3 +605,77 @@ canvas#arena {
   font-size: 10px;
   line-height: 1.6;
 }
+
+/* Win streak badge */
+.streak-badge {
+  color: #c8a84b;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* Unlock progress bar */
+.unlock-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8a9bb5;
+  white-space: nowrap;
+}
+.unlock-progress-bar {
+  width: 80px;
+  height: 8px;
+  background: #1a2035;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #2a3855;
+}
+.unlock-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3a6b3a, #c8a84b);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Bestiary grid */
+.bestiary-screen {
+  padding: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.bestiary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+@media (max-width: 600px) {
+  .bestiary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.bestiary-card {
+  background: #0e1225;
+  border: 1px solid #2a3855;
+  border-radius: 8px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.bestiary-card:hover {
+  border-color: #c8a84b;
+  transform: translateY(-2px);
+}
+.bestiary-card.locked {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+.bestiary-card-emoji { font-size: 32px; line-height: 1.2; }
+.bestiary-card-name { font-size: 12px; color: #c8a84b; margin: 4px 0 2px; font-weight: bold; }
+.bestiary-card-tier { font-size: 11px; color: #556677; }
+.bestiary-stat-bar-row { display: flex; gap: 4px; margin-top: 6px; justify-content: center; }
+.bestiary-stat-bar { height: 4px; border-radius: 2px; }
+.bestiary-abilities { font-size: 10px; color: #4a8f6a; margin-top: 4px; }

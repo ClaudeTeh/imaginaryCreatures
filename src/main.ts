@@ -103,8 +103,9 @@ function topbar(): HTMLElement {
     ]),
     el("div", { class: "stats-pills" }, [
       el("span", { class: "pill" }, [pillFrag("Wins", state.wins)]),
+      ...(state.streak >= 3 ? [el("span", { class: "streak-badge" }, [`🔥×${state.streak}`])] : []),
       el("span", { class: "pill" }, [pillFrag("Losses", state.losses)]),
-      el("span", { class: "pill" }, [pillFrag("Species", state.unlocked.length)]),
+      buildUnlockProgress(),
       el(
         "button",
         {
@@ -120,6 +121,26 @@ function topbar(): HTMLElement {
         },
         [state.muted ? "🔇 Sound" : "🔊 Sound"],
       ),
+    ]),
+  ]);
+}
+
+function buildUnlockProgress(): HTMLElement {
+  const total = ANIMALS.length;
+  const unlocked = state.unlocked.length;
+  const pct = Math.round((unlocked / total) * 100);
+  const tier1 = ANIMALS.filter(a => a.tier === 1);
+  const tier2 = ANIMALS.filter(a => a.tier === 2);
+  const tier3 = ANIMALS.filter(a => a.tier === 3);
+  const t1u = tier1.filter(a => state.unlocked.includes(a.id)).length;
+  const t2u = tier2.filter(a => state.unlocked.includes(a.id)).length;
+  const t3u = tier3.filter(a => state.unlocked.includes(a.id)).length;
+  const tooltip = `Tier 1: ${t1u}/${tier1.length} · Tier 2: ${t2u}/${tier2.length} · Tier 3: ${t3u}/${tier3.length}`;
+
+  return el("span", { class: "unlock-progress", title: tooltip }, [
+    el("span", {}, [`🧬 ${unlocked}/${total}`]),
+    el("div", { class: "unlock-progress-bar" }, [
+      el("div", { class: "unlock-progress-fill", style: `width:${pct}%` }, []),
     ]),
   ]);
 }
@@ -546,11 +567,15 @@ function showResult(area: HTMLElement, winner: Side | "draw", opponentName: stri
 
   if (playerWon) {
     state.wins++;
+    state.streak++;
     unlockedId = unlockNext(state);
     sfxWin();
   } else if (winner === "b") {
     state.losses++;
+    state.streak = 0;
     sfxLose();
+  } else {
+    state.streak = 0;
   }
   state.seed = (state.seed * 1664525 + 1013904223) >>> 0;
   save(state);
