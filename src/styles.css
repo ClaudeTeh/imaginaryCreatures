@@ -708,3 +708,24 @@ canvas#arena {
 .tutorial-dots { display: flex; gap: 8px; justify-content: center; }
 .tutorial-dot { width: 8px; height: 8px; border-radius: 50%; background: #2a3855; }
 .tutorial-dot.active { background: #c8a84b; }
+
+/* Type advantage badge — Lab tooltip */
+.tip-type-badge {
+  font-size: 11px;
+  color: #c8a84b;
+  text-transform: capitalize;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  background: rgba(200, 168, 75, 0.12);
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+/* Type badge — Bestiary card */
+.bestiary-card-type {
+  font-size: 10px;
+  color: #c8a84b;
+  text-transform: capitalize;
+  opacity: 0.8;
+}

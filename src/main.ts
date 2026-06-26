@@ -13,6 +13,7 @@ import { creatureCard } from "./render/creatureCard";
 import { playBattle } from "./render/arena";
 import type { Creature3DHandle } from "./render/creature3d";
 import { initAudio, setMuted, sfxLose, sfxWin, toggleMuted } from "./render/sound";
+import { BODY_TYPE } from "./combat/typeChart";
 
 let state: GameState = load();
 let cancelArena: (() => void) | null = null;
@@ -330,6 +331,14 @@ function buildTooltip(a: Animal, slot: Slot): HTMLElement {
   const stats = part.stats;
   const lines: HTMLElement[] = [];
 
+  const bodyType = slot === "body" ? (BODY_TYPE[a.id] ?? null) : null;
+  const typeEmojis: Record<string, string> = {
+    fire: "🔥", water: "💧", nature: "🌿", earth: "🪨", air: "💨", electric: "⚡",
+  };
+  if (bodyType) {
+    lines.push(el("div", { class: "tip-type-badge" }, [`${typeEmojis[bodyType] ?? ""} ${bodyType}`]) as HTMLElement);
+  }
+
   const statDefs: [keyof typeof stats, string][] = [
     ["attack", "⚔ Attack"],
     ["defense", "🛡 Defense"],
@@ -411,10 +420,16 @@ function renderBestiary(): void {
     }
     const abilities = [...abilitySet].join(", ");
 
+    const bodyType = BODY_TYPE[animal.id];
+    const typeEmojis: Record<string, string> = {
+      fire: "🔥", water: "💧", nature: "🌿", earth: "🪨", air: "💨", electric: "⚡",
+    };
+
     return el("div", { class: "bestiary-card" }, [
       el("div", { class: "bestiary-card-emoji" }, [animal.emoji]),
       el("div", { class: "bestiary-card-name" }, [animal.name]),
       el("div", { class: "bestiary-card-tier" }, ["★".repeat(animal.tier)]),
+      ...(bodyType ? [el("div", { class: "bestiary-card-type" }, [`${typeEmojis[bodyType] ?? ""} ${bodyType}`])] : []),
       el("div", { class: "bestiary-stat-bar-row" }, [
         el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalAtk / maxAtk * 48)}px;background:#c85030;`, title: `Attack: ${totalAtk}` }, []),
         el("div", { class: "bestiary-stat-bar", style: `width:${Math.round(totalDef / maxDef * 24)}px;background:#3070c8;`, title: `Defense: ${totalDef}` }, []),
