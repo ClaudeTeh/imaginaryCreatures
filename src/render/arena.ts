@@ -181,6 +181,7 @@ export function playBattle(
   let ringMat: THREE.MeshStandardMaterial | null = null;
   let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
   let slowMoTimer = 0;
+  let victoryTimer = 0;
   let stopMusic: () => void = () => {};
   let stopAmbient: () => void = () => {};
 
@@ -534,6 +535,32 @@ export function playBattle(
     if (use3D && slowMoTimer > 0) {
       slowMoTimer--;
       timeScale = 0.28;
+    }
+
+    if (use3D && fighters3D && scene3D && victoryTimer > 0 && victoryTimer <= 60) {
+      victoryTimer++;
+      const winningSide = result.winner as Side;
+      const winner3D = fighters3D[winningSide];
+      winner3D.model.position.y = Math.abs(Math.sin(victoryTimer * 0.25)) * 0.8;
+      if (victoryTimer === 5) {
+        spawnBurst3D(winner3D.model.position, "#ffd700", 25, 0.18);
+        spawnImpactRing3D(winner3D.model.position, "#ffd700");
+      }
+      if (victoryTimer === 20) {
+        spawnBurst3D(winner3D.model.position, "#c8a84b", 15, 0.14);
+      }
+      if (victoryTimer === 61) {
+        winner3D.model.position.y = 0;
+        victoryTimer = 0;
+        if (!finished) {
+          finished = true;
+          if (hudOverlay) {
+            hudOverlay.remove();
+            hudOverlay = null;
+          }
+          onDone(result.winner);
+        }
+      }
     }
 
     if (use3D && cinematic.active) {
@@ -1389,17 +1416,20 @@ export function playBattle(
 
     const done = cursor >= ordered.length && frame > durationFrames;
     if (done && floats.length === 0 && projectiles.length === 0 && beams.length === 0 && activeProjectiles3D.length === 0 && activeParticles3D.length === 0 && activeFloats3D.length === 0) {
-      if (!finished) {
-        finished = true;
-        
-        if (hudOverlay) {
-          hudOverlay.remove();
-          hudOverlay = null;
+      if (!finished && victoryTimer === 0) {
+        if (use3D && fighters3D && result.winner !== "draw") {
+          // Defer finish — victory animation will call onDone when complete
+          victoryTimer = 1;
+        } else {
+          finished = true;
+          if (hudOverlay) {
+            hudOverlay.remove();
+            hudOverlay = null;
+          }
+          onDone(result.winner);
         }
-
-        onDone(result.winner);
       }
-      return;
+      if (victoryTimer === 0 || finished) return;
     }
     raf = requestAnimationFrame(step);
   }
