@@ -36,8 +36,14 @@ export const ANIMAL_COLORS: Record<string, PartColors> = {
   tiger:    { fill: '#c86008', shade: '#6c2e00', accent: '#f0a828' },
   dragon:   { fill: '#7c1010', shade: '#3c0808', accent: '#ff6030' },
   jellyfish:{ fill: '#3c1870', shade: '#1c0840', accent: '#b060ff' },
-  panther:  { fill: '#1a1a2e', shade: '#0d0d18', accent: '#9060e0' },
-  mantis:   { fill: '#3a7c20', shade: '#1e4410', accent: '#a0e840' },
+  panther:   { fill: '#1a1a2e', shade: '#0d0d18', accent: '#9060e0' },
+  mantis:    { fill: '#3a7c20', shade: '#1e4410', accent: '#a0e840' },
+  chameleon: { fill: '#4a9c30', shade: '#285018', accent: '#d0f060' },
+  octopus:   { fill: '#8c3080', shade: '#4a1840', accent: '#ff80f0' },
+  bat:       { fill: '#2c1840', shade: '#140c20', accent: '#9870d0' },
+  ox:        { fill: '#4c3018', shade: '#280c00', accent: '#b08040' },
+  shark:     { fill: '#384c60', shade: '#1c2c38', accent: '#80d0f8' },
+  phoenix:   { fill: '#c04010', shade: '#601800', accent: '#ffd040' },
 };
 
 // ─── shared helpers ───────────────────────────────────────────────────────────

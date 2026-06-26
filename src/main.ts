@@ -887,6 +887,7 @@ function startBattle() {
   const opponent = makeOpponent(player, state.wins, state.seed);
   const battleSeed = (state.seed ^ (state.wins * 2654435761)) >>> 0;
   const result = simulateBattle(player, opponent, makeRng(battleSeed));
+  lastBattleResult = result;
 
   clear(app);
   const canvas = el("canvas", {
@@ -972,6 +973,27 @@ function showResult(area: HTMLElement, winner: Side | "draw", opponentName: stri
       el("p", { class: "unlock-note" }, [`🔓 New species unlocked: ${a.emoji} ${a.name}!`]),
     );
   }
+  if (lastBattleResult) {
+    const evts = lastBattleResult.events;
+    const stats = {
+      playerDmg: evts.filter(e => e.kind === "attack" && e.by === "a").reduce((s, e) => s + (e as { dmg: number }).dmg, 0),
+      enemyDmg:  evts.filter(e => e.kind === "attack" && e.by === "b").reduce((s, e) => s + (e as { dmg: number }).dmg, 0),
+      crits:     evts.filter(e => e.kind === "attack" && (e as { crit: boolean }).crit).length,
+      abilities: evts.filter(e => e.kind === "ability").length,
+      rounds:    evts.filter(e => e.kind === "attack").length,
+    };
+    lines.push(
+      el("div", { class: "battle-stats" }, [
+        el("div", { class: "battle-stats-title" }, ["📊 Battle Stats"]),
+        el("div", { class: "battle-stats-row" }, [`⚔ Your damage: ${stats.playerDmg}`]),
+        el("div", { class: "battle-stats-row" }, [`🛡 Damage taken: ${stats.enemyDmg}`]),
+        el("div", { class: "battle-stats-row" }, [`💥 Critical hits: ${stats.crits}`]),
+        el("div", { class: "battle-stats-row" }, [`✨ Abilities used: ${stats.abilities}`]),
+        el("div", { class: "battle-stats-row" }, [`🔁 Rounds: ${stats.rounds}`]),
+      ]),
+    );
+  }
+
   lines.push(
     el("div", { class: "btnrow", style: "justify-content:center" }, [
       el("button", { class: "accent", onclick: startBattle }, ["⚔ Fight Again"]),
@@ -1024,6 +1046,7 @@ function startDailyChallenge(): void {
 
   const player = buildCreature(state.player);
   const result = simulateBattle(player, opponent, makeRng(seed ^ 0xdeadbeef));
+  lastBattleResult = result;
 
   screen = "arena";
   clear(app);

@@ -134,10 +134,10 @@ export function getBiome(bodyId: string): BiomeConfig {
     particleKind: "dust",
   };
 
-  const FOREST_IDS = new Set(["wolf", "bear", "gorilla", "tiger", "panther"]);
-  const SKY_IDS = new Set(["eagle", "dragon", "mantis"]);
-  const OCEAN_IDS = new Set(["cobra", "eel", "jellyfish"]);
-  const VOLCANO_IDS = new Set(["rhino", "boar", "scorpion"]);
+  const FOREST_IDS = new Set(["wolf", "bear", "gorilla", "tiger", "panther", "chameleon"]);
+  const SKY_IDS = new Set(["eagle", "dragon", "mantis", "bat"]);
+  const OCEAN_IDS = new Set(["cobra", "eel", "jellyfish", "octopus", "shark"]);
+  const VOLCANO_IDS = new Set(["rhino", "boar", "scorpion", "ox", "phoenix"]);
 
   if (FOREST_IDS.has(bodyId)) return forest;
   if (SKY_IDS.has(bodyId)) return sky;
@@ -1993,6 +1993,9 @@ export function playBattle(
             camShake = Math.max(camShake, e.crit ? 1.2 : 0.6);
             if (e.crit) {
               slowMoTimer = 35;
+              const critPos = foe3D.model.position.clone();
+              critPos.y += 3.5;
+              createFloat3D(critPos, "CRITICAL!", "#ff4444", 36);
             }
             spawnBurst3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b", e.crit ? 18 : 10, e.crit ? 0.2 : 0.12);
             spawnImpactRing3D(foe3D.model.position, e.crit ? "#ffce6b" : "#ff8f6b");

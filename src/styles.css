@@ -835,3 +835,23 @@ canvas#arena {
   z-index: 8000;
 }
 .gauntlet-continue-text { font-size: 15px; color: #8a9bb5; }
+
+/* ── Post-battle stats panel ──────────────────────────── */
+.battle-stats {
+  margin-top: 16px;
+  border-top: 1px solid #1e2d44;
+  padding-top: 12px;
+  text-align: left;
+}
+.battle-stats-title {
+  font-size: 12px;
+  color: #c8a84b;
+  font-weight: bold;
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+}
+.battle-stats-row {
+  font-size: 12px;
+  color: #5a7090;
+  line-height: 1.8;
+}
