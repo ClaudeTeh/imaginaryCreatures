@@ -39,11 +39,36 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     return new THREE.CanvasTexture(canvas);
   }
 
+  // Draw base color
+  ctx.fillStyle = baseHex;
+  ctx.fillRect(0, 0, 256, 256);
+
+  // 1. Bake a vertical shading gradient (top-down lighting/ambient occlusion)
+  const shadGrad = ctx.createLinearGradient(0, 0, 0, 256);
+  shadGrad.addColorStop(0, "rgba(255, 255, 255, 0.16)"); // soft highlight at the top
+  shadGrad.addColorStop(0.4, "rgba(255, 255, 255, 0)");
+  shadGrad.addColorStop(0.7, "rgba(0, 0, 0, 0)");
+  shadGrad.addColorStop(1, "rgba(0, 0, 0, 0.22)"); // dark ambient occlusion shadow at the bottom
+  ctx.fillStyle = shadGrad;
+  ctx.fillRect(0, 0, 256, 256);
+
+  // 2. Add organic watercolor brush strokes for hand-painted look
+  ctx.globalAlpha = 0.05;
+  ctx.fillStyle = accentHex;
+  for (let i = 0; i < 20; i++) {
+    const x = Math.random() * 256;
+    const y = Math.random() * 256;
+    const rx = 15 + Math.random() * 30;
+    const ry = 4 + Math.random() * 8;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1.0;
+
   switch (animalId) {
     case "cobra":
     case "eel": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 3;
       const scaleSize = 32;
@@ -58,8 +83,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "tiger": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = "#121212";
       for (let i = 0; i < 8; i++) {
         const y = 20 + i * 32 + Math.random() * 8;
@@ -81,8 +104,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     }
     case "ant":
     case "scorpion": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       for (let y = 0; y < 256; y += 32) {
         const grad = ctx.createLinearGradient(0, y, 0, y + 32);
         grad.addColorStop(0, accentHex);
@@ -90,13 +111,13 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
         grad.addColorStop(0.7, baseHex);
         grad.addColorStop(1, accentHex);
         ctx.fillStyle = grad;
+        ctx.globalAlpha = 0.85;
         ctx.fillRect(0, y, 256, 28);
+        ctx.globalAlpha = 1.0;
       }
       break;
     }
     case "eagle": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       const rowHeight = 24;
       for (let y = 0; y < 256 + rowHeight; y += rowHeight) {
@@ -115,8 +136,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     }
     case "boar":
     case "rhino": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       for (let i = 0; i < 250; i++) {
         const x = Math.random() * 256;
@@ -131,8 +150,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     case "wolf":
     case "bear":
     case "rabbit": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 1.5;
       for (let i = 0; i < 350; i++) {
@@ -148,8 +165,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "dragon": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       for (let row = 0; row < 12; row++) {
         const offset = (row % 2) * 22;
@@ -170,8 +185,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "jellyfish": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       for (let ring = 0; ring < 6; ring++) {
         const r = 20 + ring * 36;
         const grad = ctx.createRadialGradient(128, 128, r - 12, 128, 128, r);
@@ -184,8 +197,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "crab": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 2.5;
       const size = 24;
@@ -211,8 +222,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
     }
     case "gecko":
     case "chameleon": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       const spacing = 10;
       for (let y = 0; y < 256; y += spacing) {
@@ -226,8 +235,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "mantis": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 1.5;
       for (let i = 0; i < 4; i++) {
@@ -248,8 +255,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "panther": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       for (let i = 0; i < 28; i++) {
         const cx = Math.random() * 256;
@@ -268,8 +273,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "octopus": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 3;
       for (let i = 0; i < 24; i++) {
@@ -286,8 +289,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "bat": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 1.8;
       for (let i = 0; i < 8; i++) {
@@ -302,8 +303,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "ox": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 1.0;
       const spacing = 16;
@@ -326,8 +325,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "shark": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       for (let i = 0; i < 400; i++) {
         const x = Math.random() * 256;
@@ -337,8 +334,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "phoenix": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       for (let i = 0; i < 30; i++) {
         const cx = Math.random() * 256;
@@ -358,8 +353,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "gorilla": {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = accentHex;
       ctx.lineWidth = 1.8;
       for (let i = 0; i < 400; i++) {
@@ -375,8 +368,6 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     default: {
-      ctx.fillStyle = baseHex;
-      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = accentHex;
       ctx.globalAlpha = 0.15;
       for (let i = 0; i < 100; i++) {
@@ -523,7 +514,7 @@ function sphere(
     noTexture?: boolean;
   } = {}
 ) {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 22, 18), mat(c, opts));
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
   }
@@ -543,7 +534,7 @@ function cone(
     noTexture?: boolean;
   } = {}
 ) {
-  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 16), mat(c, opts));
+  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
   }
@@ -564,7 +555,7 @@ function cyl(
     noTexture?: boolean;
   } = {}
 ) {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 16), mat(c, opts));
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 8), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
   }
