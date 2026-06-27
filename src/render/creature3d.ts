@@ -9,18 +9,47 @@
  * deterministic sim or the unit tests, so the test/JSDOM path stays WebGL-free.
  */
 import * as THREE from "three";
-import { SLOTS, type Genome, type Slot } from "../core/types";
-import { ANIMAL_COLORS, type PartColors } from "./creatureParts";
+import { type Genome } from "../core/types";
+import { ANIMAL_COLORS, drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail, type PartColors } from "./creatureParts";
 import { ANIMALS } from "../data/animals";
-import {
-  getModelPart,
-  applyToonStyle,
-  fitToBox,
-  PART_TARGET_SIZE,
-  preloadAllModels,
-} from "./modelLoader";
+import { preloadAllModels } from "./modelLoader";
 
 export const modelsReady: Promise<void> = preloadAllModels(ANIMALS.map((a) => a.id));
+
+function createCutoutPlane(
+  width: number,
+  height: number,
+  drawFn: (ctx: CanvasRenderingContext2D) => void,
+  scale = 4.0
+): THREE.Mesh {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.save();
+    ctx.translate(256, 256);
+    ctx.scale(scale, scale);
+    drawFn(ctx);
+    ctx.restore();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    alphaTest: 0.02,
+    side: THREE.DoubleSide,
+  });
+
+  const geometry = new THREE.PlaneGeometry(width, height);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = false;
+  return mesh;
+}
 
 function getPremiumColor(hex: string): string {
   const color = new THREE.Color(hex);
@@ -527,7 +556,7 @@ function mat(
   return material;
 }
 
-function sphere(
+export function sphere(
   r: number,
   c: string,
   opts: {
@@ -547,7 +576,7 @@ function sphere(
   return mesh;
 }
 
-function cone(
+export function cone(
   r: number,
   h: number,
   c: string,
@@ -559,8 +588,9 @@ function cone(
     noOutline?: boolean;
     noTexture?: boolean;
   } = {}
-) {
-  // 4-segment pyramid (low-poly cone)
+): THREE.Mesh {
+  // 4-segment pyramid (low-poly cone) — kept for potential future use
+  void r; void h; void c;
   const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 4), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
@@ -568,7 +598,7 @@ function cone(
   return mesh;
 }
 
-function cyl(
+export function cyl(
   rt: number,
   rb: number,
   h: number,
@@ -581,8 +611,9 @@ function cyl(
     noOutline?: boolean;
     noTexture?: boolean;
   } = {}
-) {
-  // 5-segment prism (low-poly cylinder)
+): THREE.Mesh {
+  // 5-segment prism — kept for potential future use
+  void rt; void rb; void h; void c;
   const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 5), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
@@ -590,7 +621,7 @@ function cyl(
   return mesh;
 }
 
-function box(
+export function box(
   w: number,
   h: number,
   d: number,
@@ -603,7 +634,9 @@ function box(
     noOutline?: boolean;
     noTexture?: boolean;
   } = {}
-) {
+): THREE.Mesh {
+  // Box helper — kept for potential future use
+  void w; void h; void d; void c;
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
@@ -637,773 +670,82 @@ export function createSoftShadowMesh(): THREE.Mesh {
   return mesh;
 }
 
-/** A pair of eyes parented to the head, looking forward (+Z). */
-function addEyes(head: THREE.Object3D, y: number, z: number, r = 0.09) {
-  const isTiger = currentBuilderAnimalId === "tiger";
-  const eyeColor = isTiger ? "#ffea00" : "#ffffff";
-  const eyeOpts = isTiger 
-    ? { rough: 0.1, noOutline: true, noTexture: true, emissive: "#ffcc00", emissiveI: 0.8 } 
-    : { rough: 0.2, noOutline: true, noTexture: true };
-
-  for (const s of [-1, 1] as const) {
-    const white = sphere(r, eyeColor, eyeOpts);
-    white.name = `eye_${s === 1 ? "r" : "l"}`;
-    white.position.set(s * 0.22, y, z);
-    head.add(white);
-    const pupil = sphere(r * 0.55, "#0a0a0a", { rough: 0.1, noOutline: true, noTexture: true });
-    pupil.name = `pupil_${s === 1 ? "r" : "l"}`;
-    if (isTiger) {
-      pupil.scale.set(0.35, 1.0, 1.0); // slit predator pupil
-    }
-    pupil.position.set(s * 0.22, y, z + r * 0.7);
-    head.add(pupil);
-  }
-}
-
 /** BODY — central torso, tinted by the body donor; shape varies a little by animal. */
-function buildBody(animalId: string): THREE.Group {
-  const cached = getModelPart(animalId, "body");
-  if (cached) {
-    const g = cached.clone();
-    const c = colorsFor(animalId);
-    applyToonStyle(g, c.fill, getToonGradientMap(), c.accent || c.shade);
-    fitToBox(g, PART_TARGET_SIZE.body);
-    return g;
-  }
-
+export function buildBody(animalId: string): THREE.Group {
   const g = new THREE.Group();
-  const c = colorsFor(animalId);
+  g.name = "body";
 
-  if (animalId === "ant" || animalId === "scorpion") {
-    // Segmented carapace plates
-    const cephalothorax = sphere(0.72, c.fill, { rough: 0.35, metal: 0.5 });
-    cephalothorax.scale.set(1.1, 0.75, 0.95);
-    cephalothorax.position.set(0, 0.05, 0.5);
-    g.add(cephalothorax);
-
-    for (let i = 0; i < 4; i++) {
-      const seg = sphere(0.68 - i * 0.05, i % 2 === 0 ? c.fill : c.shade, { rough: 0.35, metal: 0.5 });
-      seg.scale.set(1.1 - i * 0.04, 0.7 - i * 0.03, 0.5);
-      seg.position.set(0, -0.05 - i * 0.02, 0.1 - i * 0.32);
-      g.add(seg);
-    }
-  } 
-  else if (animalId === "crab") {
-    const carapace = sphere(1.05, c.fill, { rough: 0.3, metal: 0.4 });
-    carapace.scale.set(1.48, 0.56, 1.24);
-    g.add(carapace);
-
-    for (const s of [-1, 1] as const) {
-      const spike = cone(0.12, 0.45, c.accent, { rough: 0.25 });
-      spike.position.set(s * 1.45, 0.1, -0.1);
-      spike.rotation.z = -s * 1.15;
-      g.add(spike);
-    }
-  } 
-  else if (animalId === "cobra" || animalId === "eel") {
-    // Sinuous segmented body chain
-    const segments = 5;
-    let parent: THREE.Object3D = g;
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const segGroup = new THREE.Group();
-      segGroup.position.set(0, -0.1 * i, i === 0 ? 0.45 : -0.4);
-      const segMesh = sphere(0.82 * (1 - t * 0.45), i % 2 === 0 ? c.fill : c.shade, { rough: 0.3 });
-      segMesh.scale.set(0.85, 0.85, 1.25);
-      segGroup.add(segMesh);
-      parent.add(segGroup);
-      parent = segGroup;
-    }
-  } 
-  else if (animalId === "tiger") {
-    // Muscular chest (squashed sphere)
-    const chest = sphere(0.8, c.fill);
-    chest.scale.set(1.0, 0.9, 1.2);
-    chest.rotation.x = Math.PI / 2;
-    chest.position.set(0, 0.05, 0.45);
-    g.add(chest);
-
-    // Hips / Pelvis
-    const hips = sphere(0.7, c.fill);
-    hips.scale.set(0.85, 0.75, 1.0);
-    hips.position.set(0, -0.05, -0.45);
-    g.add(hips);
-
-    // White underbelly plates (squashed white sphere)
-    const belly = sphere(0.65, "#ffffff", { rough: 0.8, noTexture: true });
-    belly.scale.set(0.75, 0.38, 1.3);
-    belly.position.set(0, -0.38, 0.05);
-    g.add(belly);
-  }
-  else {
-    // Mammal Bipartite Torso: Chest Cylinder + Hip Sphere
-    const chest = cyl(0.8, 0.7, 1.0, c.fill);
-    chest.rotation.x = Math.PI / 2;
-    chest.position.set(0, 0, 0.45);
-    g.add(chest);
-
-    const hips = sphere(0.68, c.fill);
-    hips.position.set(0, -0.1, -0.45);
-    g.add(hips);
-
-    const belly = sphere(0.6, c.accent, { rough: 0.75 });
-    belly.scale.set(0.85, 0.45, 1.28);
-    belly.position.set(0, -0.38, 0.0);
-    g.add(belly);
-  }
+  const bodyMesh = createCutoutPlane(2.2, 2.2, (ctx) => {
+    drawBody(ctx, animalId, 0);
+  }, 8);
+  bodyMesh.name = "body_mesh";
+  g.add(bodyMesh);
 
   return g;
 }
 
-function buildHead(animalId: string): THREE.Group {
-  const cached = getModelPart(animalId, "head");
-  if (cached) {
-    const g = cached.clone();
-    const c = colorsFor(animalId);
-    applyToonStyle(g, c.fill, getToonGradientMap(), c.accent || c.shade);
-    fitToBox(g, PART_TARGET_SIZE.head);
-    return g;
-  }
-
+export function buildHead(animalId: string): THREE.Group {
   const g = new THREE.Group();
-  g.scale.setScalar(0.82);
-  const c = colorsFor(animalId);
+  g.name = "head";
 
-  // Low-poly skull shell
-  const skull = sphere(0.62, c.fill);
-  g.add(skull);
+  const headMesh = createCutoutPlane(1.4, 1.4, (ctx) => {
+    drawHead(ctx, animalId, 0, 0);
+  }, 6);
+  headMesh.name = "head_mesh";
+  g.add(headMesh);
 
-  // Extruded flat box brow ridges for battle-ready expression
-  for (const s of [-1, 1] as const) {
-    const brow = box(0.24, 0.06, 0.18, c.shade, { noTexture: true });
-    brow.position.set(s * 0.22, 0.28, 0.42);
-    brow.rotation.y = -s * 0.15;
-    g.add(brow);
-  }
-
-  addEyes(g, 0.12, 0.5, 0.09);
-
-  // Articulated Lower Jaw
-  const lowerJaw = sphere(0.22, c.fill);
-  lowerJaw.name = "lower_jaw";
-  lowerJaw.scale.set(1.0, 0.4, 1.25);
-  lowerJaw.position.set(0, -0.28, 0.22);
-  g.add(lowerJaw);
-
-  // Fangs for predators
-  if (["wolf", "tiger", "cobra", "scorpion"].includes(animalId)) {
-    for (const s of [-1, 1] as const) {
-      const fangUpper = cone(0.04, 0.2, "#ffffff", { noTexture: true });
-      fangUpper.position.set(s * 0.15, 0.05, 0.48);
-      fangUpper.rotation.x = 0.45;
-      skull.add(fangUpper);
-
-      const fangLower = cone(0.035, 0.16, "#ffffff", { noTexture: true });
-      fangLower.position.set(s * 0.14, 0.12, 0.32);
-      fangLower.rotation.x = -0.4;
-      lowerJaw.add(fangLower);
-    }
-  }
-
-  // Hooked low-poly Beak for birds
-  if (animalId === "eagle" || animalId === "phoenix") {
-    const beakUpper = cone(0.18, 0.45, "#f0b020", { rough: 0.3, noTexture: true });
-    beakUpper.position.set(0, -0.02, 0.62);
-    beakUpper.rotation.x = 1.45;
-    skull.add(beakUpper);
-
-    const beakLower = cone(0.14, 0.26, "#c08c10", { rough: 0.3, noTexture: true });
-    beakLower.position.set(0, -0.16, 0.44);
-    beakLower.rotation.x = -0.4;
-    lowerJaw.add(beakLower);
-  }
-
-  const ears = (h: number, w: number, tilt: number, col = c.fill) => {
-    for (const s of [-1, 1] as const) {
-      const ear = cone(w, h, col);
-      ear.position.set(s * 0.32, 0.55, -0.05);
-      ear.rotation.z = -s * tilt;
-      g.add(ear);
-    }
-  };
-
-  switch (animalId) {
-    case "rabbit": {
-      for (const s of [-1, 1] as const) {
-        const side = s === 1 ? "r" : "l";
-        const ear0 = cyl(0.14, 0.16, 0.35, c.fill);
-        ear0.name = `ear_${side}_0`;
-        ear0.position.set(s * 0.32, 0.55, -0.05);
-        ear0.rotation.z = -s * 0.05;
-        
-        const ear1 = cone(0.12, 0.35, c.fill);
-        ear1.name = `ear_${side}_1`;
-        ear1.position.set(0, 0.35, 0);
-        
-        ear0.add(ear1);
-        g.add(ear0);
-      }
-      break;
-    }
-    case "wolf": ears(0.34, 0.2, 0.5); break;
-    case "tiger": {
-      // Skull (base sphere)
-      const skull = sphere(0.6, c.fill);
-      g.add(skull);
-
-      // Muzzle / Snout (squashed sphere)
-      const snout = sphere(0.35, c.fill);
-      snout.scale.set(0.7, 0.6, 1.2);
-      snout.position.set(0, -0.05, 0.45);
-      g.add(snout);
-
-      // Small black nose tip
-      const noseTip = sphere(0.08, "#1a1a1a", { noTexture: true });
-      noseTip.position.set(0, 0.08, 0.85);
-      g.add(noseTip);
-
-      // White cheek ruffs (3 tiered white squashed cones on each side pointing outward and backward)
-      for (const s of [-1, 1] as const) {
-        for (let i = 0; i < 3; i++) {
-          const ruff = cone(0.18 - i * 0.03, 0.45 - i * 0.05, "#ffffff", { noTexture: true });
-          ruff.scale.set(0.6, 1.0, 0.2);
-          ruff.position.set(s * (0.42 + i * 0.08), -0.15 - i * 0.06, 0.28 - i * 0.05);
-          ruff.rotation.set(0.15, -s * 0.45, -s * (0.35 + i * 0.1));
-          g.add(ruff);
-        }
-      }
-
-      // White chin/jaw ruff (rounded white sphere)
-      const chin = sphere(0.24, "#ffffff", { rough: 0.8, noTexture: true });
-      chin.scale.set(0.8, 0.45, 1.0);
-      chin.position.set(0, -0.22, 0.42);
-      g.add(chin);
-
-      // Lower jaw
-      const jaw = box(0.32, 0.14, 0.4, c.shade);
-      jaw.position.set(0, -0.32, 0.35);
-      g.add(jaw);
-
-      // Ears (faceted tiger ears with white interior - shell shape)
-      for (const s of [-1, 1] as const) {
-        const earGroup = new THREE.Group();
-        earGroup.position.set(s * 0.42, 0.52, -0.1);
-        earGroup.rotation.set(0.15, -s * 0.22, -s * 0.35);
-
-        const earOuter = cone(0.2, 0.32, c.fill);
-        earOuter.scale.set(1.0, 1.0, 0.3); // cup shell
-        earGroup.add(earOuter);
-
-        const earInner = cone(0.14, 0.24, "#ffffff", { noTexture: true });
-        earInner.scale.set(1.0, 1.0, 0.3); // cup shell
-        earInner.position.set(0, 0.02, 0.05);
-        earGroup.add(earInner);
-
-        g.add(earGroup);
-      }
-      break;
-    }
-    case "bear": {
-      for (const s of [-1, 1] as const) {
-        const ear = sphere(0.2, c.fill); ear.position.set(s * 0.4, 0.5, -0.1); g.add(ear);
-      }
-      break;
-    }
-    case "boar": {
-      for (const s of [-1, 1] as const) {
-        const tusk = cone(0.06, 0.4, "#e8e0c0", { rough: 0.3, noTexture: true });
-        tusk.position.set(s * 0.18, 0.12, 0.3);
-        tusk.rotation.set(0.6, 0, s * 0.3);
-        lowerJaw.add(tusk);
-      }
-      const snout = sphere(0.32, c.shade); snout.scale.set(1, 0.8, 0.9); snout.position.set(0, -0.1, 0.55); g.add(snout);
-      break;
-    }
-    case "rhino": {
-      const noseHorn = cone(0.16, 0.7, c.accent, { rough: 0.4, noTexture: true });
-      noseHorn.position.set(0, 0.05, 0.7); noseHorn.rotation.x = 1.35; g.add(noseHorn);
-      const smallHorn = cone(0.1, 0.34, c.accent, { rough: 0.4, noTexture: true });
-      smallHorn.position.set(0, 0.32, 0.52); smallHorn.rotation.x = 1.25; g.add(smallHorn);
-      break;
-    }
-    case "cobra": {
-      const hood = sphere(0.55, c.fill); hood.name = "hood"; hood.scale.set(1.5, 1.4, 0.3); hood.position.set(0, 0.1, -0.2); g.add(hood);
-      break;
-    }
-    case "ant":
-    case "scorpion": {
-      for (const s of [-1, 1] as const) {
-        const m = cyl(0.03, 0.05, 0.4, c.shade, { noTexture: true });
-        m.name = `mandible_${s === 1 ? "r" : "l"}`;
-        m.position.set(s * 0.18, -0.25, 0.5);
-        m.rotation.x = 1.1;
-        g.add(m);
-      }
-      if (animalId === "ant") {
-        for (const s of [-1, 1] as const) {
-          const ant = cyl(0.02, 0.02, 0.5, c.accent, { noTexture: true });
-          ant.position.set(s * 0.18, 0.6, 0.2);
-          ant.rotation.z = -s * 0.4;
-          g.add(ant);
-        }
-      }
-      break;
-    }
-    case "gorilla":
-    case "gecko":
-    case "chameleon":
-      break;
-    case "eel": {
-      const fin = cone(0.12, 0.4, c.accent, { emissive: c.accent, emissiveI: 0.4, noTexture: true });
-      fin.position.set(0, 0.6, -0.1); g.add(fin); break;
-    }
-    case "dragon": {
-      for (const s of [-1, 1] as const) {
-        const horn = cone(0.1, 0.55, c.accent, { rough: 0.3, noTexture: true });
-        horn.position.set(s * 0.32, 0.62, -0.1);
-        horn.rotation.set(-0.15, 0, s * 0.45);
-        g.add(horn);
-      }
-      const snout = sphere(0.35, c.shade); snout.scale.set(1, 0.75, 1.1); snout.position.set(0, -0.08, 0.52); g.add(snout);
-      const glowMat = new THREE.MeshBasicMaterial({ color: 0xff5020 });
-      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), glowMat);
-      glow.position.set(0, -0.32, 0.38); g.add(glow);
-      break;
-    }
-    case "jellyfish": {
-      const bell = sphere(0.62, c.fill); bell.scale.set(1.2, 0.7, 1.2);
-      const bellMat = bell.material as THREE.MeshToonMaterial;
-      bellMat.transparent = true;
-      bellMat.opacity = 0.72;
-      bell.position.set(0, 0.2, 0); g.add(bell);
-      for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2;
-        const arm = cyl(0.03, 0.02, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.6, noTexture: true });
-        arm.position.set(Math.cos(angle) * 0.28, -0.5, Math.sin(angle) * 0.28);
-        g.add(arm);
-      }
-      break;
-    }
-    case "ox": {
-      for (const s of [-1, 1] as const) {
-        const horn = cone(0.12, 0.65, "#e5dec9", { rough: 0.4, noTexture: true });
-        horn.position.set(s * 0.32, 0.52, 0.15);
-        horn.rotation.set(0.2, 0, -s * 0.9);
-        g.add(horn);
-      }
-      ears(0.36, 0.14, 1.25);
-      break;
-    }
-    case "bat": {
-      for (const s of [-1, 1] as const) {
-        const ear = cone(0.2, 0.55, c.fill);
-        ear.name = `bat_ear_${s === 1 ? "r" : "l"}`;
-        ear.position.set(s * 0.3, 0.58, -0.05);
-        ear.rotation.set(0.1, 0, -s * 0.15);
-        g.add(ear);
-      }
-      const noseLeaf = cone(0.08, 0.22, c.accent, { noTexture: true });
-      noseLeaf.position.set(0, 0.05, 0.58);
-      noseLeaf.rotation.x = -0.45;
-      g.add(noseLeaf);
-      break;
-    }
-    case "shark": {
-      const snout = cone(0.32, 0.62, c.fill);
-      snout.position.set(0, -0.05, 0.45);
-      snout.rotation.x = 1.35;
-      g.add(snout);
-      for (let i = -2; i <= 2; i++) {
-        const tooth = cone(0.03, 0.12, "#ffffff", { noTexture: true });
-        tooth.position.set(i * 0.08, 0.14, 0.3);
-        tooth.rotation.set(-0.3, 0, 0);
-        lowerJaw.add(tooth);
-      }
-      break;
-    }
-  }
   return g;
 }
 
 /** A limb pair: two angled cylinders + foot spheres, tinted by the donor. */
-function buildLimbs(animalId: string, front: boolean): THREE.Group {
-  const part = front ? "forelimbs" : "hindlimbs";
-  const cached = getModelPart(animalId, part);
-  if (cached) {
-    const g = cached.clone();
-    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
-    fitToBox(g, PART_TARGET_SIZE[part]);
-    return g;
-  }
-
+export function buildLimbs(animalId: string, front: boolean): THREE.Group {
   const g = new THREE.Group();
-  const c = colorsFor(animalId);
-  const z = front ? 0.45 : -0.5;
+  const namePrefix = front ? "fore" : "hind";
+  g.name = namePrefix + "limbs";
 
-  if (front && (animalId === "eagle" || animalId === "phoenix")) {
-    // Articulated Volumetric Wing
-    for (const s of [-1, 1] as const) {
-      const wingGroup = new THREE.Group();
-      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
+  const isWing = front && ["eagle", "phoenix", "bat"].includes(animalId);
+  const isClaw = front && ["crab", "scorpion"].includes(animalId);
 
-      // Joint 1: Humerus
-      const upperArm = cyl(0.14, 0.09, 0.95, c.shade);
-      upperArm.position.set(s * 0.45, 0.2, -0.1);
-      upperArm.rotation.set(0.2, 0, -s * 0.9);
-      wingGroup.add(upperArm);
-
-      // Joint 2: Forearm
-      const foreArm = cyl(0.09, 0.07, 1.15, c.shade);
-      foreArm.position.set(s * 1.15, 0.65, -0.2);
-      foreArm.rotation.set(-0.15, 0, s * 0.35);
-      wingGroup.add(foreArm);
-
-      // 7 overlapping volumetric feathers (stepped fan structure using squashed spheres!)
-      for (let f = 0; f < 7; f++) {
-        const feather = sphere(0.3, c.fill, { rough: 0.3 });
-        feather.scale.set(0.62, 2.3 - f * 0.22, 0.06);
-        feather.position.set(s * (0.55 + f * 0.28), 0.25 - f * 0.09, -0.38 - f * 0.08);
-        feather.rotation.set(0.18, 0, -s * (0.75 + f * 0.07));
-        wingGroup.add(feather);
-      }
-
-      wingGroup.position.set(s * 0.65, 0.2, -0.15);
-      g.add(wingGroup);
-    }
-    return g;
-  }
-
-  // Crab / Scorpion articulated Claws
-  if (front && (animalId === "crab" || animalId === "scorpion")) {
-    for (const s of [-1, 1] as const) {
-      const pincerGroup = new THREE.Group();
-      pincerGroup.name = `claw_${s === 1 ? "r" : "l"}`;
-
-      const arm = cyl(0.12, 0.15, 0.75, c.fill);
-      arm.rotation.z = s * 0.45;
-      arm.position.set(s * 0.55, -0.25, z);
-      pincerGroup.add(arm);
-
-      // Pincer bulb
-      const bulb = sphere(0.36, c.accent, { metal: 0.5, rough: 0.25 });
-      bulb.scale.set(1.2, 0.85, 1.1);
-      bulb.position.set(s * 0.88, -0.5, z + 0.15);
-      pincerGroup.add(bulb);
-
-      // Articulated fixed pincer
-      const fixedClaw = cone(0.08, 0.38, c.accent, { noTexture: true });
-      fixedClaw.position.set(s * 1.08, -0.62, z + 0.35);
-      fixedClaw.rotation.set(0.4, 0, -s * 0.55);
-      pincerGroup.add(fixedClaw);
-
-      // Articulated mobile pincer (rotated outward)
-      const openClaw = cone(0.06, 0.32, c.shade, { noTexture: true });
-      openClaw.position.set(s * 0.86, -0.68, z + 0.28);
-      openClaw.rotation.set(0.75, 0, s * 0.28);
-      pincerGroup.add(openClaw);
-
-      g.add(pincerGroup);
-    }
-    return g;
-  }
-
-  // Mammals & reptiles legs: thigh cylinder, lower shin cylinder, paw/hoof block
-  for (const s of [-1, 1] as const) {
-    const legGroup = new THREE.Group();
-
-    if (animalId === "tiger") {
-      // Beautifully bent feline legs
-      const thigh = cyl(0.24, 0.18, 0.75, c.fill);
-      thigh.rotation.x = -0.35; // angled back
-      thigh.rotation.z = s * 0.15;
-      thigh.position.set(s * 0.55, 0.1, z - 0.08);
-      legGroup.add(thigh);
-
-      const shin = cyl(0.18, 0.12, 0.85, c.shade);
-      shin.rotation.x = 0.55; // angled forward
-      shin.rotation.z = -s * 0.08;
-      shin.position.set(s * 0.55, -0.45, z + 0.12);
-      legGroup.add(shin);
-
-      const foot = sphere(0.22, c.accent);
-      foot.scale.set(1.2, 0.55, 1.45);
-      foot.position.set(s * 0.55, -0.85, z + 0.35);
-      legGroup.add(foot);
+  const drawFn = (ctx: CanvasRenderingContext2D) => {
+    if (front) {
+      drawForelimbs(ctx, animalId, 0);
     } else {
-      // Thigh
-      const thigh = cyl(0.22, 0.16, 0.65, c.fill);
-      thigh.position.set(s * 0.55, 0.1, z);
-      thigh.rotation.z = s * 0.22;
-      legGroup.add(thigh);
-
-      // Shin
-      const shin = cyl(0.15, 0.1, 0.75, c.shade);
-      shin.position.set(s * 0.65, -0.45, z + 0.08);
-      shin.rotation.z = -s * 0.14;
-      legGroup.add(shin);
-
-      // Foot / Wedge hoof / Paw block
-      const isWedgeHoof = ["ox", "rhino", "boar"].includes(animalId);
-      const foot = isWedgeHoof 
-        ? new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.25, 4), mat(c.accent, { noTexture: true }))
-        : sphere(0.18, c.accent);
-      if (isWedgeHoof) {
-        applyToonOutline(foot);
-      }
-      
-      if (isWedgeHoof) {
-        foot.rotation.y = Math.PI / 4; // rotate square cylinder to look like hoof wedge
-        foot.position.set(s * 0.6, -0.85, z + 0.12);
-      } else {
-        foot.scale.set(1.0, 0.6, 1.3);
-        foot.position.set(s * 0.6, -0.85, z + 0.25);
-      }
-      legGroup.add(foot);
+      drawHindlimbs(ctx, animalId, 0);
     }
+  };
 
-    g.add(legGroup);
-  }
+  const w = isWing ? 2.5 : 1.4;
+  const h = isWing ? 2.5 : 1.4;
+
+  // Left limb
+  const leftLimb = createCutoutPlane(w, h, drawFn, 5);
+  leftLimb.scale.x = -1; // Mirror
+  leftLimb.position.set(isWing ? -0.75 : -0.45, isWing ? 0.35 : -0.28, -0.08);
+  leftLimb.name = isWing ? "wing_l" : (isClaw ? "claw_l" : namePrefix + "leg_l");
+  g.add(leftLimb);
+
+  // Right limb
+  const rightLimb = createCutoutPlane(w, h, drawFn, 5);
+  rightLimb.position.set(isWing ? 0.75 : 0.45, isWing ? 0.35 : -0.28, 0.08);
+  rightLimb.name = isWing ? "wing_r" : (isClaw ? "claw_r" : namePrefix + "leg_r");
+  g.add(rightLimb);
 
   return g;
 }
 
 /** TAIL — a hierarchical bone chain of segments parented to each other for tail physics. */
-function buildTail(animalId: string): THREE.Group {
-  const cached = getModelPart(animalId, "tail");
-  if (cached) {
-    const g = cached.clone();
-    applyToonStyle(g, colorsFor(animalId).fill, getToonGradientMap());
-    fitToBox(g, PART_TARGET_SIZE.tail);
-    return g;
-  }
-  // --- existing procedural code below — do not change ---
-  const root = new THREE.Group();
-  root.name = "tail";
-  const c = colorsFor(animalId);
+export function buildTail(animalId: string): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "tail";
 
-  // Eagle tail: fan of feathers (doesn't use a slithering chain)
-  if (animalId === "eagle") {
-    for (let i = -2; i <= 2; i++) {
-      const f = sphere(0.14, c.fill, { rough: 0.8 });
-      f.scale.set(0.6, 0.04, 1.42);
-      f.position.set(i * 0.13, 0.08, -1.22);
-      f.rotation.set(-0.24, i * 0.11, 0);
-      f.castShadow = true;
-      root.add(f);
-    }
-    return root;
-  }
+  const tailMesh = createCutoutPlane(1.8, 1.8, (ctx) => {
+    drawTail(ctx, animalId, 0);
+  }, 5);
+  tailMesh.name = "tail_mesh";
+  tailMesh.position.set(-0.35, 0.05, -0.15);
+  g.add(tailMesh);
 
-  // Rabbit tail puff
-  if (animalId === "rabbit") {
-    const puff = sphere(0.24, c.accent, { rough: 0.85 });
-    puff.position.set(0, 0.22, -0.92);
-    puff.castShadow = true;
-    root.add(puff);
-    return root;
-  }
-
-  // Chameleon curly tail
-  if (animalId === "chameleon") {
-    let parent: THREE.Object3D = root;
-    const segments = 10;
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const segGroup = new THREE.Group();
-      segGroup.name = `tail_seg_${i}`;
-      if (i === 0) {
-        segGroup.position.set(0, 0.1, -0.9);
-      } else {
-        segGroup.position.set(0, -0.16, -0.22 + t * 0.05);
-        segGroup.rotation.x = -0.45;
-      }
-      const mesh = sphere(0.24 * (1 - t * 0.72), c.fill);
-      mesh.castShadow = true;
-      segGroup.add(mesh);
-      parent.add(segGroup);
-      parent = segGroup;
-    }
-    return root;
-  }
-
-  // Shark tail: vertical caudal fin
-  if (animalId === "shark") {
-    let parent: THREE.Object3D = root;
-    const segments = 6;
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const segGroup = new THREE.Group();
-      segGroup.name = `tail_seg_${i}`;
-      if (i === 0) {
-        segGroup.position.set(0, 0.1, -0.9);
-      } else {
-        segGroup.position.set(0, 0.05, -0.24);
-      }
-      const mesh = sphere(0.24 * (1 - t * 0.6), c.fill);
-      mesh.castShadow = true;
-      segGroup.add(mesh);
-      if (i === segments - 1) {
-        const upperLobe = cone(0.08, 0.65, c.accent, { noTexture: true });
-        upperLobe.position.set(0, 0.28, -0.15);
-        upperLobe.rotation.x = -0.6;
-        segGroup.add(upperLobe);
-        const lowerLobe = cone(0.06, 0.42, c.accent, { noTexture: true });
-        lowerLobe.position.set(0, -0.2, -0.1);
-        lowerLobe.rotation.x = 0.6;
-        segGroup.add(lowerLobe);
-      }
-      parent.add(segGroup);
-      parent = segGroup;
-    }
-    return root;
-  }
-
-  // Phoenix tail: 3 long trail feathers
-  if (animalId === "phoenix") {
-    for (const offset of [-1, 0, 1] as const) {
-      const featherRoot = new THREE.Group();
-      featherRoot.name = `tail_feather_${offset + 1}`;
-      featherRoot.position.set(offset * 0.18, 0.1, -0.9);
-      featherRoot.rotation.set(-0.2, offset * 0.15, 0);
-      let parent: THREE.Object3D = featherRoot;
-      const segments = 7;
-      for (let i = 0; i < segments; i++) {
-        const t = i / (segments - 1);
-        const segGroup = new THREE.Group();
-        segGroup.name = `tail_seg_${offset + 1}_${i}`;
-        if (i === 0) {
-          segGroup.position.set(0, 0, 0);
-        } else {
-          segGroup.position.set(0, -0.25 / segments, -1.5 / segments);
-        }
-        const mesh = sphere(0.16 * (1 - t * 0.5), c.fill, { emissive: c.accent, emissiveI: 0.5 });
-        mesh.scale.set(1.0, 0.12, 1.4);
-        mesh.castShadow = true;
-        segGroup.add(mesh);
-        parent.add(segGroup);
-        parent = segGroup;
-      }
-      root.add(featherRoot);
-    }
-    return root;
-  }
-
-  // Segmented Rocky Scorpion Tail
-  if (animalId === "scorpion") {
-    let parent: THREE.Object3D = root;
-    const segments = 9; // more segments for smoother arch
-    for (let i = 0; i < segments; i++) {
-      const t = i / (segments - 1);
-      const segGroup = new THREE.Group();
-      segGroup.name = `tail_seg_${i}`;
-      
-      if (i === 0) {
-        segGroup.position.set(0, 0.1, -0.9);
-      } else {
-        // Curve up and then slightly forward
-        segGroup.position.set(0, 1.65 / segments, -1.1 / segments);
-        segGroup.rotation.x = 0.22;
-      }
-      
-      // Rocky blocky tail segment dodecahedron (low-poly basalt rock)
-      const sz = 0.18 * (1 - t * 0.42);
-      const geom = new THREE.DodecahedronGeometry(sz);
-      const mesh = new THREE.Mesh(geom, mat(i % 2 === 0 ? "#4a4a52" : "#2d2d34", { rough: 0.85, noTexture: true }));
-      mesh.scale.set(1.0, 1.0, 1.45); // Elongated along the tail axis
-      applyToonOutline(mesh);
-      mesh.castShadow = true;
-      segGroup.add(mesh);
-
-      if (i === segments - 1) {
-        // Stinger bulb
-        const bulb = sphere(0.18, c.accent, { rough: 0.25, metal: 0.5 });
-        bulb.position.set(0, 0.15, 0.15);
-        segGroup.add(bulb);
-
-        // Curved claw stinger
-        const stinger = cone(0.05, 0.28, "#0d0d0d", { rough: 0.1 });
-        stinger.rotation.x = -1.35;
-        stinger.position.set(0, 0.25, 0.22);
-        segGroup.add(stinger);
-      }
-      
-      parent.add(segGroup);
-      parent = segGroup;
-    }
-    return root;
-  }
-
-  // Standard bone chain tail
-  let parent: THREE.Object3D = root;
-  const segments = animalId === "cobra" ? 8 : (animalId === "tiger" ? 8 : 6);
-  
-  for (let i = 0; i < segments; i++) {
-    const t = i / (segments - 1);
-    const segGroup = new THREE.Group();
-    segGroup.name = `tail_seg_${i}`;
-    
-    if (i === 0) {
-      segGroup.position.set(0, 0.1, -0.9);
-    } else {
-      if (animalId === "scorpion") {
-        segGroup.position.set(0, 1.45 / segments, -1.22 / segments);
-      } else if (animalId === "cobra") {
-        segGroup.position.set(0, -0.45 / segments, -1.35 / segments);
-      } else if (animalId === "tiger") {
-        segGroup.position.set(0, -0.2 / segments, -1.38 / segments);
-      } else {
-        segGroup.position.set(0, 0.25 / segments, -1.1 / segments);
-      }
-    }
-    
-    let mesh: THREE.Mesh;
-    if (animalId === "scorpion") {
-      const sz = 0.24 * (1 - t * 0.44);
-      mesh = sphere(sz, i % 2 === 0 ? c.fill : c.shade, { rough: 0.35, metal: 0.5 });
-    } else if (animalId === "cobra") {
-      mesh = sphere(0.24 * (1 - t * 0.72), c.fill);
-    } else if (animalId === "tiger") {
-      mesh = sphere(0.18 * (1 - t * 0.42), i % 2 === 0 ? c.fill : "#0d0d0d");
-    } else {
-      mesh = sphere(0.26 * (1 - t * 0.7), c.fill);
-    }
-    mesh.castShadow = true;
-    segGroup.add(mesh);
-    
-    // Add end attachments to last segment
-    if (i === segments - 1) {
-      if (animalId === "scorpion") {
-        const poisonBulb = sphere(0.18, c.accent, { rough: 0.22, metal: 0.65, emissive: c.accent, emissiveI: 0.55 });
-        poisonBulb.position.set(0, 0.14, 0.14);
-        segGroup.add(poisonBulb);
-
-        const needle = cone(0.04, 0.24, "#0f0f0f", { rough: 0.1 });
-        needle.rotation.x = -1.25;
-        needle.position.set(0, 0.24, 0.24);
-        segGroup.add(needle);
-      } else if (animalId === "cobra") {
-        const tip = cone(0.12, 0.34, c.accent, { rough: 0.35 });
-        tip.rotation.x = -0.6;
-        tip.position.set(0, 0.2, -0.4);
-        segGroup.add(tip);
-      } else if (animalId === "eel" || animalId === "default") {
-        const fin = cone(0.25, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.5 });
-        fin.rotation.x = -1.4;
-        fin.position.set(0, 0.1, -0.4);
-        segGroup.add(fin);
-      } else if (animalId === "dragon") {
-        const spade = cone(0.18, 0.45, c.accent, { rough: 0.3, noTexture: true });
-        spade.rotation.x = -Math.PI / 2;
-        spade.position.set(0, 0.05, -0.32);
-        segGroup.add(spade);
-      }
-    }
-    
-    parent.add(segGroup);
-    parent = segGroup;
-  }
-  
-  return root;
+  return g;
 }
 
 
@@ -1411,69 +753,76 @@ function buildTail(animalId: string): THREE.Group {
 export function buildCreatureModel(genome: Genome): THREE.Group {
   const root = new THREE.Group();
 
-  const placements: Record<Slot, (g: THREE.Object3D) => void> = {
-    body: (g) => g.position.set(0, 1.45, 0),
-    head: (g) => g.position.set(0, 1.95, 0.78),
-    forelimbs: (g) => {
-      const id = genome.forelimbs;
-      const y = ["crab", "scorpion"].includes(id) ? 1.62 : (["eagle", "phoenix", "bat"].includes(id) ? 1.28 : 1.2);
-      g.position.set(0, y, 0);
-    },
-    hindlimbs: (g) => g.position.set(0, 1.2, 0),
-    tail: (g) => g.position.set(0, 1.35, -0.68),
+  // Draw all 5 parts onto a single high-res canvas composite billboard.
+  // Parts are laid out using the 2D coordinate conventions from creatureParts.ts:
+  //   tail→ left, hindlimbs→ rear-lower, body→ centre, forelimbs→ front-lower, head→ right
+  const S = 4; // canvas scale: 1 unit in 2D coords = S pixels
+  const W = 512, H = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, W, H);
+
+  // Centre of creature in canvas pixels (shift right/up to centre the body)
+  const cx = W * 0.50;
+  const cy = H * 0.48;
+
+  // Draw order: tail → hindlimbs → body → forelimbs → head (back-to-front)
+  const drawPart = (drawFn: () => void, offX: number, offY: number) => {
+    ctx.save();
+    ctx.translate(cx + offX * S, cy + offY * S);
+    ctx.scale(S, S);
+    drawFn();
+    ctx.restore();
   };
 
-  const builders: Record<Slot, () => THREE.Group> = {
-    body: () => {
-      currentBuilderAnimalId = genome.body;
-      const res = buildBody(genome.body);
-      currentBuilderAnimalId = null;
-      return res;
-    },
-    head: () => {
-      currentBuilderAnimalId = genome.head;
-      const res = buildHead(genome.head);
-      currentBuilderAnimalId = null;
-      return res;
-    },
-    forelimbs: () => {
-      currentBuilderAnimalId = genome.forelimbs;
-      const res = buildLimbs(genome.forelimbs, true);
-      currentBuilderAnimalId = null;
-      return res;
-    },
-    hindlimbs: () => {
-      currentBuilderAnimalId = genome.hindlimbs;
-      const res = buildLimbs(genome.hindlimbs, false);
-      currentBuilderAnimalId = null;
-      return res;
-    },
-    tail: () => {
-      currentBuilderAnimalId = genome.tail;
-      const res = buildTail(genome.tail);
-      currentBuilderAnimalId = null;
-      return res;
-    },
-  };
-
-  for (const slot of SLOTS) {
-    const part = builders[slot]();
-    placements[slot](part);
-    part.name = slot;
-    root.add(part);
-  }
-
-  // a neck bridge in the body's colour to tie head to torso
-  currentBuilderAnimalId = genome.body;
-  const neck = box(0.32, 0.42, 0.62, colorsFor(genome.body).fill);
+  // Tail: leftmost
+  currentBuilderAnimalId = genome.tail;
+  drawPart(() => drawTail(ctx, genome.tail, 0), -38, 10);
   currentBuilderAnimalId = null;
-  neck.name = "neck";
-  neck.position.set(0, 1.72, 0.42);
-  neck.rotation.x = -0.65; // angle forward/up from chest to head
-  root.add(neck);
 
-  // Dynamic bio-luminescent PointLights inside the model based on genomes!
-  // This lights up the creature segments and casts dynamic lights on pedestals.
+  // Hindlimbs: rear-lower
+  currentBuilderAnimalId = genome.hindlimbs;
+  drawPart(() => drawHindlimbs(ctx, genome.hindlimbs, 0), -18, 22);
+  currentBuilderAnimalId = null;
+
+  // Body: centre
+  currentBuilderAnimalId = genome.body;
+  drawPart(() => drawBody(ctx, genome.body, 0), 0, 8);
+  currentBuilderAnimalId = null;
+
+  // Forelimbs: front-lower
+  currentBuilderAnimalId = genome.forelimbs;
+  drawPart(() => drawForelimbs(ctx, genome.forelimbs, 0), 18, 22);
+  currentBuilderAnimalId = null;
+
+  // Head: rightmost, upper
+  currentBuilderAnimalId = genome.head;
+  drawPart(() => drawHead(ctx, genome.head, 0, 0), 35, -10);
+  currentBuilderAnimalId = null;
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const mat2d = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    alphaTest: 0.02,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+
+  // Billboard plane sized to fit the creature (~3 units wide, 3 units tall)
+  const billboard = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), mat2d);
+  billboard.name = "creature_billboard";
+  // Position to sit above pedestal centred on the creature
+  billboard.position.set(0, 1.7, 0);
+  // Tilt slightly toward camera (camera is at y=2.2, z=7.2 looking at origin)
+  billboard.rotation.x = -0.05;
+  root.add(billboard);
+  root.name = "creature_composite";
+
+  // Dynamic bio-luminescent PointLights
   if (genome.head === "eel" || genome.body === "eel") {
     const electricLight = new THREE.PointLight(0x00ffff, 1.3, 7);
     electricLight.position.set(0, 1.6, 0.4);
@@ -1697,6 +1046,12 @@ export function mountCreature3D(
     }
     model.rotation.y = rotationOffset.y;
     model.rotation.x = rotationOffset.x;
+
+    // Billboard: always face the camera so the flat 2D sprite stays visible
+    const billboard = model.getObjectByName("creature_billboard") as THREE.Mesh | undefined;
+    if (billboard) {
+      billboard.lookAt(camera.position);
+    }
     
     // Breathing & idle motions based on genome stances
     const body = model.getObjectByName("body");
