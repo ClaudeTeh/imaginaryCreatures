@@ -181,6 +181,7 @@ export function playBattle(
   let ringGeo: THREE.TorusGeometry | null = null;
   let ringMat: THREE.MeshStandardMaterial | null = null;
   let floorRings: THREE.Mesh[] = [];
+  let rotatingRings: THREE.Mesh[] = [];
   let flashWhiteMaterial: THREE.MeshBasicMaterial | null = null;
   let slowMoTimer = 0;
   let victoryTimer = 0;
@@ -231,6 +232,7 @@ export function playBattle(
     speed: number;
     colorHex: string;
     onHit: () => void;
+    light?: THREE.PointLight;
   }
 
   interface Beam3D {
@@ -240,6 +242,8 @@ export function playBattle(
     kind: "lightning" | "tether" | "tether_1" | "tether_2";
     x1: number; y1: number; z1: number;
     x2: number; y2: number; z2: number;
+    light?: THREE.PointLight;
+    branches?: THREE.Line[];
   }
 
   interface Float3D {
@@ -331,11 +335,28 @@ export function playBattle(
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
+    // Procedural soft circular glowing particle texture
+    const pCanvas = document.createElement("canvas");
+    pCanvas.width = 16;
+    pCanvas.height = 16;
+    const pCtx = pCanvas.getContext("2d");
+    if (pCtx) {
+      const gradient = pCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
+      gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+      gradient.addColorStop(0.3, "rgba(255, 255, 255, 0.8)");
+      gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+      pCtx.fillStyle = gradient;
+      pCtx.fillRect(0, 0, 16, 16);
+    }
+    const pTexture = new THREE.CanvasTexture(pCanvas);
+
     const mat = new THREE.PointsMaterial({
       color: new THREE.Color(cfg.particleColor),
-      size: cfg.particleKind === "streak" ? 0.08 : 0.12,
+      size: cfg.particleKind === "streak" ? 0.22 : 0.45,
+      map: pTexture,
+      blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.8,
       depthWrite: false,
     });
 
@@ -830,6 +851,29 @@ export function playBattle(
       floorRings.push(fRing);
     }
 
+    // Double-Concentric Rotating Neon Rings
+    rotatingRings = [];
+    const rotColors = [biome.ambientHex, biome.fogHex];
+    for (let i = 0; i < 2; i++) {
+      const radius = 6.0 + i * 2.5;
+      const ringWidth = 0.05;
+      const rotGeo = new THREE.TorusGeometry(radius, ringWidth, 8, 64);
+      const rotMat = new THREE.MeshStandardMaterial({
+        color: rotColors[i],
+        emissive: rotColors[i],
+        emissiveIntensity: 2.0,
+        roughness: 0.2,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const rotRing = new THREE.Mesh(rotGeo, rotMat);
+      rotRing.rotation.x = Math.PI / 2;
+      rotRing.position.y = 0.025;
+      rotRing.userData = { dir: i === 0 ? 1 : -1 };
+      scene3D.add(rotRing);
+      rotatingRings.push(rotRing);
+    }
+
     spawnBiomeParticles(scene3D, biome);
 
     stopMusic = startBattleMusic(biomeName);
@@ -1148,12 +1192,18 @@ export function playBattle(
           scene3D.remove(pr.mesh);
           pr.mesh.geometry.dispose();
           (pr.mesh.material as THREE.Material).dispose();
+          if (pr.light) {
+            scene3D.remove(pr.light);
+          }
           pr.onHit();
           activeProjectiles3D.splice(i, 1);
         } else {
           const current = new THREE.Vector3().lerpVectors(pr.start, pr.end, pr.progress);
           current.y += Math.sin(pr.progress * Math.PI) * 1.5;
           pr.mesh.position.copy(current);
+          if (pr.light) {
+            pr.light.position.copy(current);
+          }
           
           // Emit trail particles (2-3 tiny particles)
           const particlesCount = 2 + Math.floor(Math.random() * 2);
@@ -1189,7 +1239,9 @@ export function playBattle(
       for (let i = activeParticles3D.length - 1; i >= 0; i--) {
         const p = activeParticles3D[i];
         p.mesh.position.addScaledVector(p.velocity, timeScale);
-        if (p.mesh.geometry.type === "RingGeometry") {
+        if (p.mesh.name === "shockwave_dome") {
+          p.mesh.scale.addScalar(0.24 * timeScale);
+        } else if (p.mesh.geometry.type === "RingGeometry") {
           p.mesh.scale.addScalar(0.14 * timeScale);
         } else if (p.mesh.geometry.type === "IcosahedronGeometry") {
           p.mesh.scale.addScalar(0.015 * timeScale);
@@ -1281,6 +1333,11 @@ export function playBattle(
       if (ringMat) {
         ringMat.emissiveIntensity = 1.2 + Math.sin(t * 2.0) * 0.3;
       }
+      // Rotate concentric neon rings
+      rotatingRings.forEach(r => {
+        const dir = r.userData.dir || 1;
+        r.rotation.z += 0.008 * dir * timeScale;
+      });
 
       // Update active 3D beams
       for (let i = activeBeams3D.length - 1; i >= 0; i--) {
@@ -1290,6 +1347,16 @@ export function playBattle(
           scene3D.remove(b.line);
           b.line.geometry.dispose();
           (b.line.material as THREE.Material).dispose();
+          if (b.light) {
+            scene3D.remove(b.light);
+          }
+          if (b.branches) {
+            b.branches.forEach(bl => {
+              scene3D.remove(bl);
+              bl.geometry.dispose();
+              (bl.material as THREE.Material).dispose();
+            });
+          }
           activeBeams3D.splice(i, 1);
           continue;
         }
@@ -1299,6 +1366,35 @@ export function playBattle(
         const dx = b.x2 - b.x1;
         const dy = b.y2 - b.y1;
         const dz = b.z2 - b.z1;
+
+        if (b.kind === "lightning" && b.light) {
+          b.light.intensity = (1.5 + Math.random() * 2.0) * (b.life / b.maxLife);
+        }
+
+        // Crackle lightning branch lines
+        if (b.kind === "lightning" && b.branches) {
+          b.branches.forEach(bl => {
+            const bPosAttr = bl.geometry.attributes.position as THREE.BufferAttribute;
+            const bStart = bl.userData.start as THREE.Vector3;
+            const bEnd = bl.userData.end as THREE.Vector3;
+            const bDx = bEnd.x - bStart.x;
+            const bDy = bEnd.y - bStart.y;
+            const bDz = bEnd.z - bStart.z;
+            const bLen = Math.hypot(bDx, bDy, bDz) || 1;
+            const bNx = -bDy / bLen;
+            const bNy = bDx / bLen;
+            const bSegs = 5;
+            for (let j = 0; j <= bSegs; j++) {
+              const tt = j / bSegs;
+              const px = bStart.x + bDx * tt;
+              const py = bStart.y + bDy * tt;
+              const pz = bStart.z + bDz * tt;
+              const off = (Math.random() - 0.5) * 0.35 * Math.sin(tt * Math.PI);
+              bPosAttr.setXYZ(j, px + bNx * off, py + bNy * off, pz);
+            }
+            bPosAttr.needsUpdate = true;
+          });
+        }
         
         if (b.kind === "tether_1" || b.kind === "tether_2") {
           const D = new THREE.Vector3(dx, dy, dz);
@@ -2057,6 +2153,29 @@ export function playBattle(
     });
   };
 
+  const spawnShockwaveDome3D = (pos: THREE.Vector3, colorHex: string) => {
+    const geo = new THREE.SphereGeometry(0.1, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(colorHex),
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = "shockwave_dome";
+    mesh.position.copy(pos);
+    mesh.position.y = 0.01;
+    scene3D?.add(mesh);
+    activeParticles3D.push({
+      mesh,
+      velocity: new THREE.Vector3(0, 0, 0),
+      life: 1.0,
+      decay: 0.05,
+    });
+  };
+
   const spawnBurst3D = (pos: THREE.Vector3, colorHex: string, count = 20, speed = 0.12) => {
     const geo = new THREE.SphereGeometry(0.06, 6, 6);
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex), transparent: true, opacity: 0.9 });
@@ -2377,6 +2496,48 @@ export function playBattle(
     const line = new THREE.Line(geo, mat);
     scene3D?.add(line);
     const isLightning = kind === "lightning";
+
+    let light: THREE.PointLight | undefined;
+    let branches: THREE.Line[] | undefined;
+    if (isLightning) {
+      const mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+      light = new THREE.PointLight(0xc39bff, 2.5, 8);
+      light.position.copy(mid);
+      scene3D?.add(light);
+
+      branches = [];
+      const numBranches = 1 + Math.floor(Math.random() * 2);
+      for (let bIdx = 0; bIdx < numBranches; bIdx++) {
+        const tVal = 0.3 + Math.random() * 0.4;
+        const startPt = new THREE.Vector3().lerpVectors(from, to, tVal);
+        const dir = new THREE.Vector3().subVectors(to, from).normalize();
+        const perp = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+        if (perp.lengthSq() < 0.001) perp.set(1, 0, 0);
+        const randAngle = (Math.random() - 0.5) * 1.5;
+        const branchLength = 1.0 + Math.random() * 2.0;
+        const endPt = startPt.clone()
+          .addScaledVector(dir, branchLength * 0.6)
+          .addScaledVector(perp, Math.sin(randAngle) * branchLength * 0.8);
+        
+        const branchPts: THREE.Vector3[] = [];
+        const bSegs = 5;
+        for (let j = 0; j <= bSegs; j++) {
+          branchPts.push(new THREE.Vector3());
+        }
+        const bGeo = new THREE.BufferGeometry().setFromPoints(branchPts);
+        const bMat = new THREE.LineBasicMaterial({
+          color: new THREE.Color(colorHex),
+        });
+        const bLine = new THREE.Line(bGeo, bMat);
+        scene3D?.add(bLine);
+        branches.push(bLine);
+        bLine.userData = {
+          start: startPt.clone(),
+          end: endPt.clone(),
+        };
+      }
+    }
+
     activeBeams3D.push({
       line,
       life: isLightning ? 22 : 40,
@@ -2384,6 +2545,8 @@ export function playBattle(
       kind,
       x1: from.x, y1: from.y, z1: from.z,
       x2: to.x, y2: to.y, z2: to.z,
+      light,
+      branches,
     });
   };
 
@@ -2438,6 +2601,8 @@ export function playBattle(
       const projMesh = new THREE.Mesh(projGeo, projMat);
       projMesh.position.copy(startPos);
       scene3D?.add(projMesh);
+      const projLight = new THREE.PointLight(0x39ff14, 1.5, 6);
+      scene3D?.add(projLight);
       activeProjectiles3D.push({
         mesh: projMesh,
         start: startPos,
@@ -2445,6 +2610,7 @@ export function playBattle(
         progress: 0,
         speed: 0.018,
         colorHex: "#39ff14",
+        light: projLight,
         onHit: () => {
           fighters[other(e.by)].hitAnim = 0.9;
           foe3D.shake = 1.0;
@@ -2499,6 +2665,7 @@ export function playBattle(
         camShake = Math.max(camShake, 1.2);
         spawnBurst3D(foe3D.model.position, "#ffae19", 18, 0.22);
         spawnImpactRing3D(foe3D.model.position, "#ffae19");
+        spawnShockwaveDome3D(foe3D.model.position, "#ffae19");
         spawnGroundCrack3D(foe3D.model.position, 1.5);
         spawnDebris3D(foe3D.model.position, 15);
         spawnDustCloud3D(foe3D.model.position, 12);
@@ -3001,11 +3168,24 @@ export function playBattle(
         scene3D?.remove(p.mesh);
         p.mesh.geometry.dispose();
         (p.mesh.material as THREE.Material).dispose();
+        if (p.light) {
+          scene3D?.remove(p.light);
+        }
       });
       activeBeams3D.forEach(b => {
         scene3D?.remove(b.line);
         b.line.geometry.dispose();
         (b.line.material as THREE.Material).dispose();
+        if (b.light) {
+          scene3D?.remove(b.light);
+        }
+        if (b.branches) {
+          b.branches.forEach(bl => {
+            scene3D?.remove(bl);
+            bl.geometry.dispose();
+            (bl.material as THREE.Material).dispose();
+          });
+        }
       });
       activeFloats3D.forEach(f => {
         scene3D?.remove(f.sprite);
@@ -3015,7 +3195,9 @@ export function playBattle(
       if (biomeParticleSystem && scene3D) {
         scene3D.remove(biomeParticleSystem.mesh);
         biomeParticleSystem.mesh.geometry.dispose();
-        (biomeParticleSystem.mesh.material as THREE.Material).dispose();
+        const mMaterial = biomeParticleSystem.mesh.material as THREE.PointsMaterial;
+        mMaterial.map?.dispose();
+        mMaterial.dispose();
       }
       floorRings.forEach(r => {
         r.geometry.dispose();
@@ -3023,6 +3205,12 @@ export function playBattle(
         scene3D?.remove(r);
       });
       floorRings = [];
+      rotatingRings.forEach(r => {
+        r.geometry.dispose();
+        (r.material as THREE.Material).dispose();
+        scene3D?.remove(r);
+      });
+      rotatingRings = [];
       renderer3D?.dispose();
     }
   };
