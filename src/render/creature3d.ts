@@ -612,50 +612,27 @@ function buildBody(animalId: string): THREE.Group {
     fitToBox(g, PART_TARGET_SIZE.body);
     return g;
   }
-  // --- existing procedural code below — do not change ---
+
   const g = new THREE.Group();
   const c = colorsFor(animalId);
 
-  if (animalId === "ant") {
-    // 3 segments: Thorax, Petiole (small waist connector), and Gaster (abdomen)
-    const thorax = sphere(0.65, c.fill, { rough: 0.25, metal: 0.2 });
-    thorax.scale.set(1.0, 0.9, 1.2);
-    thorax.position.set(0, 0, 0.45);
-    thorax.castShadow = true;
-    g.add(thorax);
-
-    const petiole = cyl(0.12, 0.12, 0.4, c.shade, { rough: 0.3 });
-    petiole.rotation.x = Math.PI / 2;
-    petiole.position.set(0, -0.1, 0.0);
-    g.add(petiole);
-
-    const gaster = sphere(0.82, c.fill, { rough: 0.25, metal: 0.2 });
-    gaster.scale.set(1.0, 0.85, 1.55);
-    gaster.position.set(0, -0.1, -0.65);
-    gaster.castShadow = true;
-    g.add(gaster);
-  } 
-  else if (animalId === "scorpion") {
-    // Segmented carapace segments (Mesosoma) tapering backwards
+  if (animalId === "ant" || animalId === "scorpion") {
+    // Segmented carapace plates
     const cephalothorax = sphere(0.72, c.fill, { rough: 0.35, metal: 0.5 });
     cephalothorax.scale.set(1.1, 0.75, 0.95);
     cephalothorax.position.set(0, 0.05, 0.5);
-    cephalothorax.castShadow = true;
     g.add(cephalothorax);
 
     for (let i = 0; i < 4; i++) {
       const seg = sphere(0.68 - i * 0.05, i % 2 === 0 ? c.fill : c.shade, { rough: 0.35, metal: 0.5 });
       seg.scale.set(1.1 - i * 0.04, 0.7 - i * 0.03, 0.5);
       seg.position.set(0, -0.05 - i * 0.02, 0.1 - i * 0.32);
-      seg.castShadow = true;
       g.add(seg);
     }
   } 
   else if (animalId === "crab") {
-    // Flattened round shell carapace with defensive side spikes
     const carapace = sphere(1.05, c.fill, { rough: 0.3, metal: 0.4 });
     carapace.scale.set(1.48, 0.56, 1.24);
-    carapace.castShadow = true;
     g.add(carapace);
 
     for (const s of [-1, 1] as const) {
@@ -665,92 +642,41 @@ function buildBody(animalId: string): THREE.Group {
       g.add(spike);
     }
   } 
-  else if (animalId === "rhino") {
-    // Plated thick leather hide
-    const torso = sphere(1.22, c.fill, { rough: 0.88 });
-    torso.scale.set(1.22, 1.04, 1.34);
-    torso.castShadow = true;
-    g.add(torso);
-
-    for (const s of [-1, 1] as const) {
-      const armorPlate = sphere(0.92, c.accent, { rough: 0.85 });
-      armorPlate.scale.set(0.18, 0.92, 1.12);
-      armorPlate.position.set(s * 0.74, 0.05, 0);
-      g.add(armorPlate);
-    }
-  } 
-  else if (animalId === "gorilla") {
-    // Bulky shoulder mass and a silver grey saddle on the back
-    const torso = sphere(1.26, c.fill, { rough: 0.84 });
-    torso.scale.set(1.28, 1.18, 1.18);
-    torso.castShadow = true;
-    g.add(torso);
-
-    const silverSaddle = sphere(0.88, "#b0b6c2", { rough: 0.88 });
-    silverSaddle.scale.set(1.04, 0.38, 0.86);
-    silverSaddle.position.set(0, 0.72, -0.16);
-    g.add(silverSaddle);
-  } 
-  else if (animalId === "eel") {
-    // serptentine elongated body with a dorsal fin running backwards
-    const torso = sphere(0.82, c.fill, { rough: 0.36, metal: 0.48 });
-    torso.scale.set(0.72, 0.72, 1.84);
-    torso.castShadow = true;
-    g.add(torso);
-
-    const dorsalFin = cyl(0.01, 0.14, 2.1, c.accent, { emissive: c.accent, emissiveI: 0.65 });
-    dorsalFin.position.set(0, 0.54, -0.22);
-    dorsalFin.rotation.x = Math.PI / 2 + 0.08;
-    g.add(dorsalFin);
-  } 
-  else if (animalId === "cobra") {
-    // slithering snake posture body with scale pattern underbelly
-    const torso = sphere(0.84, c.fill, { rough: 0.28 });
-    torso.scale.set(0.78, 0.78, 1.62);
-    torso.castShadow = true;
-    g.add(torso);
-
-    const belly = sphere(0.68, c.accent, { rough: 0.42 });
-    belly.scale.set(0.64, 0.32, 1.38);
-    belly.position.set(0, -0.42, 0.28);
-    g.add(belly);
-  } 
-  else if (animalId === "tiger") {
-    const torso = sphere(1.02, c.fill, { rough: 0.75 });
-    torso.scale.set(1.05, 0.92, 1.25);
-    torso.castShadow = true;
-    g.add(torso);
-
-    // Tiger stripes wrapping the body using thin black capsules
-    for (let i = -3; i <= 3; i++) {
-      const stripeL = cyl(0.02, 0.02, 1.6, "#121212", { rough: 0.8 });
-      stripeL.position.set(-0.95, 0, i * 0.3);
-      stripeL.rotation.z = 0.25;
-      g.add(stripeL);
-
-      const stripeR = cyl(0.02, 0.02, 1.6, "#121212", { rough: 0.8 });
-      stripeR.position.set(0.95, 0, i * 0.3);
-      stripeR.rotation.z = -0.25;
-      g.add(stripeR);
+  else if (animalId === "cobra" || animalId === "eel") {
+    // Sinuous segmented body chain
+    const segments = 5;
+    let parent: THREE.Object3D = g;
+    for (let i = 0; i < segments; i++) {
+      const t = i / (segments - 1);
+      const segGroup = new THREE.Group();
+      segGroup.position.set(0, -0.1 * i, i === 0 ? 0.45 : -0.4);
+      const segMesh = sphere(0.82 * (1 - t * 0.45), i % 2 === 0 ? c.fill : c.shade, { rough: 0.3 });
+      segMesh.scale.set(0.85, 0.85, 1.25);
+      segGroup.add(segMesh);
+      parent.add(segGroup);
+      parent = segGroup;
     }
   } 
   else {
-    // Classic mammal torso
-    const torso = sphere(1.02, c.fill);
-    torso.scale.set(1.05, 0.92, 1.2);
-    torso.castShadow = true;
-    g.add(torso);
+    // Mammal Bipartite Torso: Chest Cylinder + Hip Sphere
+    const chest = cyl(0.8, 0.7, 1.0, c.fill);
+    chest.rotation.x = Math.PI / 2;
+    chest.position.set(0, 0, 0.45);
+    g.add(chest);
 
-    const belly = sphere(0.7, c.accent, { rough: 0.75 });
-    belly.scale.set(0.88, 0.58, 0.98);
-    belly.position.set(0, -0.44, 0.24);
+    const hips = sphere(0.68, c.fill);
+    hips.position.set(0, -0.1, -0.45);
+    g.add(hips);
+
+    const belly = sphere(0.6, c.accent, { rough: 0.75 });
+    belly.scale.set(0.85, 0.45, 1.28);
+    belly.position.set(0, -0.38, 0.0);
     g.add(belly);
   }
 
   return g;
 }
 
-/** HEAD — sits forward+up; per-animal features (ears, horns, beak, hood…). */
 function buildHead(animalId: string): THREE.Group {
   const cached = getModelPart(animalId, "head");
   if (cached) {
@@ -760,41 +686,59 @@ function buildHead(animalId: string): THREE.Group {
     fitToBox(g, PART_TARGET_SIZE.head);
     return g;
   }
-  // --- existing procedural code below — do not change ---
-  const g = new THREE.Group();
-  g.scale.setScalar(0.82); // keep head proportional to the torso
-  const c = colorsFor(animalId);
-  const skull = sphere(0.62, c.fill);
-  skull.castShadow = true;
-  g.add(skull);
-  
-  // Custom glowing eyes for visual flair
-  let eyeColor = "#ffffff";
-  let eyeGlow = 0.5;
-  if (animalId === "eel") { eyeColor = "#39ff14"; eyeGlow = 2.0; }
-  else if (animalId === "gecko") { eyeColor = "#ffd700"; eyeGlow = 2.2; }
-  else if (animalId === "cobra" || animalId === "scorpion") { eyeColor = "#ff3b30"; eyeGlow = 1.8; }
-  
-  addEyes(g, 0.12, 0.5, 0.09);
-  
-  // Apply specific colors/lights to eyes
-  g.children.forEach(child => {
-    if (child instanceof THREE.Mesh && child.position.z > 0.52 && eyeGlow > 1) {
-      const childMat = child.material as THREE.MeshStandardMaterial;
-      if (childMat.emissive) {
-        childMat.emissive.set(new THREE.Color(eyeColor));
-        childMat.emissiveIntensity = eyeGlow;
-      }
-    }
-  });
 
-  // Lower jaw segment (grows/moves down during roars/attacks)
+  const g = new THREE.Group();
+  g.scale.setScalar(0.82);
+  const c = colorsFor(animalId);
+
+  // Low-poly skull shell
+  const skull = sphere(0.62, c.fill);
+  g.add(skull);
+
+  // Extruded flat box brow ridges for battle-ready expression
+  for (const s of [-1, 1] as const) {
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.18), mat(c.shade, { noTexture: true }));
+    brow.position.set(s * 0.22, 0.28, 0.42);
+    brow.rotation.y = -s * 0.15;
+    g.add(brow);
+  }
+
+  addEyes(g, 0.12, 0.5, 0.09);
+
+  // Articulated Lower Jaw
   const lowerJaw = sphere(0.22, c.fill);
   lowerJaw.name = "lower_jaw";
   lowerJaw.scale.set(1.0, 0.4, 1.25);
   lowerJaw.position.set(0, -0.28, 0.22);
-  lowerJaw.castShadow = true;
   g.add(lowerJaw);
+
+  // Fangs for predators
+  if (["wolf", "tiger", "cobra", "scorpion"].includes(animalId)) {
+    for (const s of [-1, 1] as const) {
+      const fangUpper = cone(0.04, 0.2, "#ffffff", { noTexture: true });
+      fangUpper.position.set(s * 0.15, 0.05, 0.48);
+      fangUpper.rotation.x = 0.45;
+      skull.add(fangUpper);
+
+      const fangLower = cone(0.035, 0.16, "#ffffff", { noTexture: true });
+      fangLower.position.set(s * 0.14, 0.12, 0.32);
+      fangLower.rotation.x = -0.4;
+      lowerJaw.add(fangLower);
+    }
+  }
+
+  // Hooked low-poly Beak for birds
+  if (animalId === "eagle" || animalId === "phoenix") {
+    const beakUpper = cone(0.18, 0.45, "#f0b020", { rough: 0.3, noTexture: true });
+    beakUpper.position.set(0, -0.02, 0.62);
+    beakUpper.rotation.x = 1.45;
+    skull.add(beakUpper);
+
+    const beakLower = cone(0.14, 0.26, "#c08c10", { rough: 0.3, noTexture: true });
+    beakLower.position.set(0, -0.16, 0.44);
+    beakLower.rotation.x = -0.4;
+    lowerJaw.add(beakLower);
+  }
 
   const ears = (h: number, w: number, tilt: number, col = c.fill) => {
     for (const s of [-1, 1] as const) {
@@ -802,14 +746,6 @@ function buildHead(animalId: string): THREE.Group {
       ear.position.set(s * 0.32, 0.55, -0.05);
       ear.rotation.z = -s * tilt;
       g.add(ear);
-    }
-  };
-  const horns = (len: number, col = c.accent) => {
-    for (const s of [-1, 1] as const) {
-      const horn = cone(0.1, len, col, { rough: 0.4, noTexture: true });
-      horn.position.set(s * 0.3, 0.55, 0.2);
-      horn.rotation.z = -s * 0.4;
-      g.add(horn);
     }
   };
 
@@ -834,7 +770,6 @@ function buildHead(animalId: string): THREE.Group {
     case "wolf": ears(0.34, 0.2, 0.5); break;
     case "tiger": {
       ears(0.26, 0.22, 0.7); 
-      // tiger muzzle
       const muzzle = sphere(0.24, c.accent);
       muzzle.position.set(0, -0.15, 0.5);
       g.add(muzzle);
@@ -847,7 +782,6 @@ function buildHead(animalId: string): THREE.Group {
       break;
     }
     case "boar": {
-      // tusks (parented to lower jaw so they open/close with it)
       for (const s of [-1, 1] as const) {
         const tusk = cone(0.06, 0.4, "#e8e0c0", { rough: 0.3, noTexture: true });
         tusk.position.set(s * 0.18, 0.12, 0.3);
@@ -858,41 +792,18 @@ function buildHead(animalId: string): THREE.Group {
       break;
     }
     case "rhino": {
-      // Rhino double horns
       const noseHorn = cone(0.16, 0.7, c.accent, { rough: 0.4, noTexture: true });
       noseHorn.position.set(0, 0.05, 0.7); noseHorn.rotation.x = 1.35; g.add(noseHorn);
       const smallHorn = cone(0.1, 0.34, c.accent, { rough: 0.4, noTexture: true });
       smallHorn.position.set(0, 0.32, 0.52); smallHorn.rotation.x = 1.25; g.add(smallHorn);
       break;
     }
-    case "eagle": {
-      const beak = cone(0.18, 0.5, "#f0b020", { rough: 0.3, noTexture: true });
-      beak.position.set(0, -0.05, 0.62); beak.rotation.x = 1.4; g.add(beak);
-      
-      // Feather crest
-      for (let i = -1; i <= 1; i++) {
-        const feather = cone(0.04, 0.3, c.accent);
-        feather.position.set(i * 0.14, 0.58, -0.18);
-        feather.rotation.set(-0.4, 0, i * 0.2);
-        g.add(feather);
-      }
-      break;
-    }
     case "cobra": {
-      // flared snake hood
       const hood = sphere(0.55, c.fill); hood.name = "hood"; hood.scale.set(1.5, 1.4, 0.3); hood.position.set(0, 0.1, -0.2); g.add(hood);
-      // fangs
-      for (const s of [-1, 1] as const) {
-        const fang = cone(0.04, 0.22, "#ffffff", { noTexture: true });
-        fang.position.set(s * 0.15, -0.22, 0.52);
-        fang.rotation.x = -0.2;
-        g.add(fang);
-      }
       break;
     }
     case "ant":
     case "scorpion": {
-      // mandibles + antennae
       for (const s of [-1, 1] as const) {
         const m = cyl(0.03, 0.05, 0.4, c.shade, { noTexture: true });
         m.name = `mandible_${s === 1 ? "r" : "l"}`;
@@ -900,41 +811,43 @@ function buildHead(animalId: string): THREE.Group {
         m.rotation.x = 1.1;
         g.add(m);
       }
-      if (animalId === "ant") for (const s of [-1, 1] as const) {
-        const ant = cyl(0.02, 0.02, 0.5, c.accent, { noTexture: true }); ant.position.set(s * 0.18, 0.6, 0.2); ant.rotation.z = -s * 0.4; g.add(ant);
+      if (animalId === "ant") {
+        for (const s of [-1, 1] as const) {
+          const ant = cyl(0.02, 0.02, 0.5, c.accent, { noTexture: true });
+          ant.position.set(s * 0.18, 0.6, 0.2);
+          ant.rotation.z = -s * 0.4;
+          g.add(ant);
+        }
       }
       break;
     }
     case "gorilla":
-    case "gecko": horns(0.0001); break; // none — keep plain rounded head
+    case "gecko":
+    case "chameleon":
+      break;
     case "eel": {
       const fin = cone(0.12, 0.4, c.accent, { emissive: c.accent, emissiveI: 0.4, noTexture: true });
       fin.position.set(0, 0.6, -0.1); g.add(fin); break;
     }
     case "dragon": {
-      // Two curved horns
       for (const s of [-1, 1] as const) {
         const horn = cone(0.1, 0.55, c.accent, { rough: 0.3, noTexture: true });
         horn.position.set(s * 0.32, 0.62, -0.1);
         horn.rotation.set(-0.15, 0, s * 0.45);
         g.add(horn);
       }
-      // Snout with nostril ridges
       const snout = sphere(0.35, c.shade); snout.scale.set(1, 0.75, 1.1); snout.position.set(0, -0.08, 0.52); g.add(snout);
-      // Fire-glow under chin — plain emissive sphere, no toon shading needed
       const glowMat = new THREE.MeshBasicMaterial({ color: 0xff5020 });
       const glow = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), glowMat);
       glow.position.set(0, -0.32, 0.38); g.add(glow);
       break;
     }
     case "jellyfish": {
-      // Translucent dome bell on top
       const bell = sphere(0.62, c.fill); bell.scale.set(1.2, 0.7, 1.2);
       const bellMat = bell.material as THREE.MeshToonMaterial;
       bellMat.transparent = true;
       bellMat.opacity = 0.72;
       bell.position.set(0, 0.2, 0); g.add(bell);
-      // Dangling oral arms
       for (let i = 0; i < 5; i++) {
         const angle = (i / 5) * Math.PI * 2;
         const arm = cyl(0.03, 0.02, 0.5, c.accent, { emissive: c.accent, emissiveI: 0.6, noTexture: true });
@@ -980,27 +893,6 @@ function buildHead(animalId: string): THREE.Group {
       }
       break;
     }
-    case "chameleon": {
-      ["eye_r", "eye_l", "pupil_r", "pupil_l"].forEach(name => {
-        const obj = g.getObjectByName(name);
-        if (obj) g.remove(obj);
-      });
-      for (const s of [-1, 1] as const) {
-        const side = s === 1 ? "r" : "l";
-        const turret = cyl(0.18, 0.22, 0.36, c.fill);
-        turret.name = `turret_${side}`;
-        turret.position.set(s * 0.35, 0.18, 0.3);
-        turret.rotation.set(0, s * 0.8, 0);
-        g.add(turret);
-
-        const pupil = sphere(0.06, "#0e0e0e", { noTexture: true });
-        pupil.name = `chameleon_pupil_${side}`;
-        pupil.position.set(0, 0, 0.19);
-        turret.add(pupil);
-      }
-      break;
-    }
-    default: ears(0.3, 0.16, 0.4);
   }
   return g;
 }
@@ -1015,167 +907,38 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     fitToBox(g, PART_TARGET_SIZE[part]);
     return g;
   }
-  // --- existing procedural code below — do not change ---
+
   const g = new THREE.Group();
   const c = colorsFor(animalId);
   const z = front ? 0.45 : -0.5;
-  const len = front ? 1.15 : 1.25;
 
-  if (front && animalId === "eagle") {
-    // Dynamic feathered wings
-    for (const s of [-1, 1] as const) {
-      const wingGroup = new THREE.Group();
-      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
-      
-      const wingGeo = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        0, 0, 0,
-        s * 2.2, 1.2, -0.4,
-        s * 1.8, 0, -1.2,
-        s * 0.9, -0.2, -0.8,
-      ]);
-      const indices = [0, 1, 2, 0, 2, 3];
-      wingGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      wingGeo.setIndex(indices);
-      wingGeo.computeVertexNormals();
-      
-      const wingMesh = new THREE.Mesh(wingGeo, mat(c.fill, { rough: 0.3 }));
-      wingMesh.material.side = THREE.DoubleSide;
-      wingMesh.castShadow = true;
-      wingGroup.add(wingMesh);
-      applyToonOutline(wingMesh);
-
-      wingGroup.position.set(s * 0.65, 0.2, -0.15);
-      g.add(wingGroup);
-    }
-    return g;
-  }
-
-  if (front && animalId === "phoenix") {
-    for (const s of [-1, 1] as const) {
-      const wingGroup = new THREE.Group();
-      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
-      
-      const wingGeo = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        0, 0, 0,
-        s * 2.4, 1.3, -0.4,
-        s * 1.9, -0.1, -1.2,
-        s * 0.9, -0.3, -0.8,
-      ]);
-      const indices = [0, 1, 2, 0, 2, 3];
-      wingGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      wingGeo.setIndex(indices);
-      wingGeo.computeVertexNormals();
-      const wingMesh = new THREE.Mesh(wingGeo, mat(c.fill, { emissive: c.accent, emissiveI: 0.9 }));
-      wingMesh.material.side = THREE.DoubleSide;
-      wingMesh.castShadow = true;
-      wingGroup.add(wingMesh);
-      applyToonOutline(wingMesh);
-
-      for (let f = 0; f < 4; f++) {
-        const plume = cone(0.12, 1.1 - f * 0.15, "#ffbb33", { emissive: "#ff5500", emissiveI: 1.5, noTexture: true });
-        plume.position.set(s * (0.8 + f * 0.35), 0.3 - f * 0.1, -0.4 - f * 0.15);
-        plume.rotation.set(0.2, 0, -s * (0.8 + f * 0.1));
-        wingGroup.add(plume);
-      }
-      wingGroup.position.set(s * 0.65, 0.2, -0.15);
-      g.add(wingGroup);
-    }
-    return g;
-  }
-
-  if (front && animalId === "bat") {
+  if (front && (animalId === "eagle" || animalId === "phoenix")) {
+    // Articulated Volumetric Wing
     for (const s of [-1, 1] as const) {
       const wingGroup = new THREE.Group();
       wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
 
-      const upperArm = cyl(0.08, 0.08, 1.0, c.shade, { rough: 0.4 });
-      upperArm.position.set(s * 0.35, 0.3, -0.1);
-      upperArm.rotation.set(0.2, 0, -s * 0.8);
+      // Joint 1: Humerus
+      const upperArm = cyl(0.12, 0.08, 0.9, c.shade);
+      upperArm.position.set(s * 0.45, 0.2, -0.1);
+      upperArm.rotation.set(0.2, 0, -s * 0.9);
       wingGroup.add(upperArm);
 
-      const foreArm = cyl(0.06, 0.06, 1.2, c.shade, { rough: 0.4 });
-      foreArm.position.set(s * 0.95, 0.7, -0.2);
-      foreArm.rotation.set(-0.2, 0, s * 0.3);
+      // Joint 2: Forearm
+      const foreArm = cyl(0.08, 0.06, 1.1, c.shade);
+      foreArm.position.set(s * 1.15, 0.65, -0.2);
+      foreArm.rotation.set(-0.15, 0, s * 0.35);
       wingGroup.add(foreArm);
 
-      const membraneGeo = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        s * 0.65, 0.2, -0.15,
-        s * 2.2, 1.1, -0.4,
-        s * 1.9, -0.6, -1.1,
-        s * 1.3, -0.9, -0.9,
-        s * 0.7, -0.7, -0.6,
-      ]);
-      const indices = [
-        0, 1, 2,
-        0, 2, 3,
-        0, 3, 4
-      ];
-      membraneGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      membraneGeo.setIndex(indices);
-      membraneGeo.computeVertexNormals();
-      const membraneMesh = new THREE.Mesh(membraneGeo, mat(c.fill, { rough: 0.8 }));
-      membraneMesh.material.side = THREE.DoubleSide;
-      membraneMesh.castShadow = true;
-      wingGroup.add(membraneMesh);
-      applyToonOutline(membraneMesh);
-
-      for (let f = 0; f < 3; f++) {
-        const strut = cyl(0.02, 0.02, 1.2, c.shade, { noTexture: true });
-        strut.position.set(s * 1.45 - s * f * 0.3, 0.1 - f * 0.1, -0.6 + f * 0.1);
-        strut.rotation.set(0.3, 0, -s * (0.5 + f * 0.3));
-        wingGroup.add(strut);
+      // Overlapping flat low-poly feathers (planes) parented to arm segments
+      for (let f = 0; f < 5; f++) {
+        const feather = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.4 - f * 0.15), mat(c.fill, { rough: 0.3 }));
+        feather.position.set(s * (0.6 + f * 0.25), 0.2 - f * 0.08, -0.4 - f * 0.1);
+        feather.rotation.set(0.15, 0, -s * (0.8 + f * 0.08));
+        feather.material.side = THREE.DoubleSide;
+        wingGroup.add(feather);
+        applyToonOutline(feather);
       }
-
-      wingGroup.position.set(0, 0, 0);
-      g.add(wingGroup);
-    }
-    return g;
-  }
-
-  if (front && animalId === "dragon") {
-    for (const s of [-1, 1] as const) {
-      const wingGroup = new THREE.Group();
-      wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
-      
-      const strut1 = cyl(0.1, 0.08, 1.3, c.shade);
-      strut1.position.set(s * 0.5, 0.4, -0.2);
-      strut1.rotation.set(0.1, 0, -s * 0.9);
-      wingGroup.add(strut1);
-
-      const strut2 = cyl(0.07, 0.05, 1.5, c.shade);
-      strut2.position.set(s * 1.2, 0.9, -0.4);
-      strut2.rotation.set(-0.15, 0, s * 0.4);
-      wingGroup.add(strut2);
-
-      const wingGeo = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        0, 0, 0,
-        s * 2.3, 1.3, -0.5,
-        s * 2.0, -0.4, -1.3,
-        s * 1.2, -0.8, -1.0,
-        s * 0.6, -0.5, -0.6,
-      ]);
-      const indices = [
-        0, 1, 2,
-        0, 2, 3,
-        0, 3, 4
-      ];
-      wingGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      wingGeo.setIndex(indices);
-      wingGeo.computeVertexNormals();
-      const wingMesh = new THREE.Mesh(wingGeo, mat(c.fill, { rough: 0.7 }));
-      wingMesh.material.side = THREE.DoubleSide;
-      wingMesh.castShadow = true;
-      wingGroup.add(wingMesh);
-      applyToonOutline(wingMesh);
-
-      const claw = cone(0.06, 0.28, c.accent, { noTexture: true });
-      claw.position.set(s * 1.8, 1.3, -0.4);
-      claw.rotation.set(0.4, 0, -s * 0.5);
-      wingGroup.add(claw);
 
       wingGroup.position.set(s * 0.65, 0.2, -0.15);
       g.add(wingGroup);
@@ -1183,270 +946,74 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     return g;
   }
 
-  if (front && animalId === "mantis") {
+  // Crab / Scorpion articulated Claws
+  if (front && (animalId === "crab" || animalId === "scorpion")) {
     for (const s of [-1, 1] as const) {
-      const limbGroup = new THREE.Group();
-      limbGroup.name = `mantis_scythe_${s === 1 ? "r" : "l"}`;
-      
-      const arm = cyl(0.09, 0.08, 0.75, c.fill, { rough: 0.3 });
-      arm.position.set(s * 0.58, -0.15, z);
-      arm.rotation.set(0.2, 0, s * 0.3);
-      arm.castShadow = true;
-      limbGroup.add(arm);
+      const pincerGroup = new THREE.Group();
+      pincerGroup.name = `claw_${s === 1 ? "r" : "l"}`;
 
-      const knee = sphere(0.12, c.shade, { rough: 0.3 });
-      knee.position.set(s * 0.66, -0.48, z + 0.1);
-      limbGroup.add(knee);
-
-      const tibia = cyl(0.07, 0.04, 0.85, c.fill, { rough: 0.3 });
-      tibia.position.set(s * 0.72, -0.85, z + 0.32);
-      tibia.rotation.set(0.9, 0, -s * 0.15);
-      tibia.castShadow = true;
-      limbGroup.add(tibia);
-
-      const bladeGeo = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        s * 0.72, -0.85, z + 0.32,
-        s * 0.92, -1.3, z + 0.65,
-        s * 0.8, -1.0, z + 0.45,
-      ]);
-      const indices = [0, 1, 2];
-      bladeGeo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      bladeGeo.setIndex(indices);
-      bladeGeo.computeVertexNormals();
-      const bladeMesh = new THREE.Mesh(bladeGeo, mat(c.accent, { rough: 0.1, metal: 0.5, noTexture: true }));
-      bladeMesh.material.side = THREE.DoubleSide;
-      bladeMesh.castShadow = true;
-      limbGroup.add(bladeMesh);
-      applyToonOutline(bladeMesh);
-
-      for (let sp = 0; sp < 4; sp++) {
-        const spike = cone(0.03, 0.12, c.accent, { noTexture: true });
-        spike.position.set(s * (0.7 + sp * 0.02), -0.7 - sp * 0.1, z + 0.2 + sp * 0.08);
-        spike.rotation.set(0.6, 0, -s * 0.5);
-        limbGroup.add(spike);
-      }
-
-      g.add(limbGroup);
-    }
-    return g;
-  }
-
-  // Crab pincers
-  if (front && animalId === "crab") {
-    for (const s of [-1, 1] as const) {
-      const legGroup = new THREE.Group();
-      const arm = cyl(0.14, 0.18, 0.8, c.fill, { rough: 0.3 });
+      const arm = cyl(0.12, 0.15, 0.75, c.fill);
       arm.rotation.z = s * 0.45;
-      arm.position.set(s * 0.65, -0.3, z);
-      arm.castShadow = true;
-      legGroup.add(arm);
+      arm.position.set(s * 0.55, -0.25, z);
+      pincerGroup.add(arm);
 
-      const clawBase = sphere(0.38, c.accent, { metal: 0.5, rough: 0.25 });
-      clawBase.position.set(s * 0.95, -0.55, z + 0.15);
-      clawBase.scale.set(1.2, 0.85, 1.05);
-      clawBase.castShadow = true;
-      legGroup.add(clawBase);
+      // Pincer bulb
+      const bulb = sphere(0.36, c.accent, { metal: 0.5, rough: 0.25 });
+      bulb.scale.set(1.2, 0.85, 1.1);
+      bulb.position.set(s * 0.88, -0.5, z + 0.15);
+      pincerGroup.add(bulb);
 
-      const f1 = cone(0.08, 0.36, c.accent, { metal: 0.5, rough: 0.25, noTexture: true });
-      f1.position.set(s * 1.15, -0.65, z + 0.36);
-      f1.rotation.set(0.4, 0, -s * 0.5);
-      legGroup.add(f1);
+      // Articulated fixed pincer
+      const fixedClaw = cone(0.08, 0.38, c.accent, { noTexture: true });
+      fixedClaw.position.set(s * 1.08, -0.62, z + 0.35);
+      fixedClaw.rotation.set(0.4, 0, -s * 0.55);
+      pincerGroup.add(fixedClaw);
 
-      const f2 = cone(0.06, 0.3, c.shade, { metal: 0.5, rough: 0.25, noTexture: true });
-      f2.position.set(s * 0.95, -0.72, z + 0.3);
-      f2.rotation.set(0.6, 0, s * 0.2);
-      legGroup.add(f2);
+      // Articulated mobile pincer (rotated outward)
+      const openClaw = cone(0.06, 0.32, c.shade, { noTexture: true });
+      openClaw.position.set(s * 0.86, -0.68, z + 0.28);
+      openClaw.rotation.set(0.75, 0, s * 0.28);
+      pincerGroup.add(openClaw);
 
-      g.add(legGroup);
+      g.add(pincerGroup);
     }
     return g;
   }
 
-  // Scorpion pincers
-  if (front && animalId === "scorpion") {
-    for (const s of [-1, 1] as const) {
-      const legGroup = new THREE.Group();
-      const arm = cyl(0.1, 0.13, 0.9, c.fill, { rough: 0.35 });
-      arm.rotation.z = s * 0.5;
-      arm.position.set(s * 0.7, -0.3, z);
-      arm.castShadow = true;
-      legGroup.add(arm);
-
-      const clawBase = sphere(0.28, c.accent, { metal: 0.6, rough: 0.25 });
-      clawBase.position.set(s * 1.0, -0.65, z + 0.25);
-      clawBase.scale.set(1.0, 0.7, 1.25);
-      legGroup.add(clawBase);
-
-      const f1 = cone(0.06, 0.3, c.accent, { metal: 0.6, rough: 0.25, noTexture: true });
-      f1.position.set(s * 1.1, -0.75, z + 0.42);
-      f1.rotation.set(0.3, 0, -s * 0.3);
-      legGroup.add(f1);
-
-      const f2 = cone(0.05, 0.24, c.shade, { metal: 0.6, rough: 0.25, noTexture: true });
-      f2.position.set(s * 0.9, -0.8, z + 0.38);
-      f2.rotation.set(0.5, 0, s * 0.1);
-      legGroup.add(f2);
-
-      g.add(legGroup);
-    }
-    return g;
-  }
-
-  // Segmented insect legs with capped joint spheres
-  if (["ant", "scorpion"].includes(animalId)) {
-    for (const s of [-1, 1] as const) {
-      const legGroup = new THREE.Group();
-      
-      const coxaJoint = sphere(0.13, c.shade, { rough: 0.3 });
-      coxaJoint.position.set(s * 0.52, -0.4, z);
-      legGroup.add(coxaJoint);
-
-      const coxa = cyl(0.09, 0.09, 0.32, c.shade, { rough: 0.2 });
-      coxa.position.set(s * 0.52, -0.4, z);
-      coxa.rotation.z = s * 0.82;
-      coxa.castShadow = true;
-      legGroup.add(coxa);
-
-      const femurJoint = sphere(0.11, c.fill, { rough: 0.3 });
-      femurJoint.position.set(s * 0.76, -0.72, z + 0.08);
-      legGroup.add(femurJoint);
-
-      const femur = cyl(0.065, 0.065, 0.82, c.fill, { rough: 0.2 });
-      femur.position.set(s * 0.76, -0.72, z + 0.08);
-      femur.rotation.z = s * 0.42;
-      femur.castShadow = true;
-      legGroup.add(femur);
-
-      const tibiaJoint = sphere(0.08, c.shade, { rough: 0.3 });
-      tibiaJoint.position.set(s * 0.92, -1.22, z + 0.16);
-      legGroup.add(tibiaJoint);
-
-      const tibia = cyl(0.045, 0.032, 0.92, c.shade, { rough: 0.2 });
-      tibia.position.set(s * 0.92, -1.22, z + 0.16);
-      tibia.rotation.z = -s * 0.58;
-      tibia.castShadow = true;
-      legGroup.add(tibia);
-
-      g.add(legGroup);
-    }
-    return g;
-  }
-
-  // Hopping thighs connected via shin Bezier tubes
-  if (!front && animalId === "rabbit") {
-    for (const s of [-1, 1] as const) {
-      const legGroup = new THREE.Group();
-      
-      const thigh = sphere(0.36, c.fill, { rough: 0.78 });
-      thigh.scale.set(0.9, 1.25, 0.9);
-      thigh.position.set(s * 0.56, -0.22, z);
-      thigh.castShadow = true;
-      legGroup.add(thigh);
-
-      // shin Bezier tube connecting thigh to foot
-      const start = new THREE.Vector3(s * 0.56, -0.42, z);
-      const mid = new THREE.Vector3(s * 0.76, -0.72, z - 0.15);
-      const end = new THREE.Vector3(s * 0.56, -0.92, z + 0.15);
-      
-      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-      const shinGeo = new THREE.TubeGeometry(curve, 10, 0.12, 8, false);
-      const shinMesh = new THREE.Mesh(shinGeo, mat(c.fill, { rough: 0.78 }));
-      shinMesh.castShadow = true;
-      legGroup.add(shinMesh);
-      applyToonOutline(shinMesh);
-
-      const knee = sphere(0.14, c.fill, { rough: 0.78 });
-      knee.position.copy(mid);
-      legGroup.add(knee);
-
-      const foot = sphere(0.18, c.shade, { rough: 0.78 });
-      foot.scale.set(0.8, 0.38, 1.45);
-      foot.position.copy(end);
-      foot.castShadow = true;
-      legGroup.add(foot);
-
-      g.add(legGroup);
-    }
-    return g;
-  }
-
-  // Gorilla muscular forelimbs using curved Bezier tubes
-  if (front && animalId === "gorilla") {
-    for (const s of [-1, 1] as const) {
-      const legGroup = new THREE.Group();
-      
-      const shoulder = sphere(0.35, c.shade, { rough: 0.82 });
-      shoulder.position.set(s * 0.64, 0, z + 0.08);
-      legGroup.add(shoulder);
-
-      const start = new THREE.Vector3(s * 0.64, 0, z + 0.08);
-      const mid = new THREE.Vector3(s * 0.92, -0.65, z + 0.2);
-      const end = new THREE.Vector3(s * 0.68, -1.3, z + 0.24);
-
-      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-      const tubeGeo = new THREE.TubeGeometry(curve, 12, 0.25, 8, false);
-      const tubeMesh = new THREE.Mesh(tubeGeo, mat(c.fill, { rough: 0.8 }));
-      tubeMesh.castShadow = true;
-      legGroup.add(tubeMesh);
-      applyToonOutline(tubeMesh);
-
-      const elbow = sphere(0.24, c.fill, { rough: 0.8 });
-      elbow.position.copy(mid);
-      legGroup.add(elbow);
-
-      const fist = sphere(0.38, c.shade, { rough: 0.82 });
-      fist.position.copy(end);
-      fist.castShadow = true;
-      legGroup.add(fist);
-      
-      g.add(legGroup);
-    }
-    return g;
-  }
-
-  // Default normal quad legs as Bezier tubes
+  // Mammals & reptiles legs: thigh cylinder, lower shin cylinder, paw/hoof block
   for (const s of [-1, 1] as const) {
     const legGroup = new THREE.Group();
-    
-    const hip = sphere(0.22, c.shade, { rough: 0.6 });
-    hip.position.set(s * 0.55, 0, z);
-    legGroup.add(hip);
 
-    const startPoint = new THREE.Vector3(s * 0.55, 0, z);
-    const midPoint = new THREE.Vector3(s * 0.8, -len * 0.45, z + (front ? 0.15 : -0.15));
-    const endPoint = new THREE.Vector3(s * 0.55, -len * 0.9, z + (front ? 0.1 : 0.0));
-    
-    const curve = new THREE.QuadraticBezierCurve3(startPoint, midPoint, endPoint);
-    const tubeGeo = new THREE.TubeGeometry(curve, 12, 0.16, 8, false);
-    const tubeMesh = new THREE.Mesh(tubeGeo, mat(c.fill, { rough: 0.6 }));
-    tubeMesh.castShadow = true;
-    legGroup.add(tubeMesh);
-    applyToonOutline(tubeMesh);
-    
-    const knee = sphere(0.16, c.fill, { rough: 0.6 });
-    knee.position.copy(midPoint);
-    legGroup.add(knee);
+    // Thigh
+    const thigh = cyl(0.22, 0.16, 0.65, c.fill);
+    thigh.position.set(s * 0.55, 0.1, z);
+    thigh.rotation.z = s * 0.22;
+    legGroup.add(thigh);
 
-    const foot = sphere(0.2, c.shade);
-    foot.scale.set(1, 0.7, 1.3);
-    foot.position.copy(endPoint);
-    foot.castShadow = true;
-    legGroup.add(foot);
+    // Shin
+    const shin = cyl(0.15, 0.1, 0.75, c.shade);
+    shin.position.set(s * 0.65, -0.45, z + 0.08);
+    shin.rotation.z = -s * 0.14;
+    legGroup.add(shin);
+
+    // Foot / Wedge hoof / Paw block
+    const isWedgeHoof = ["ox", "rhino", "boar"].includes(animalId);
+    const foot = isWedgeHoof 
+      ? new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.25, 4), mat(c.accent, { noTexture: true }))
+      : sphere(0.18, c.accent);
     
-    // claws for predatory forelimbs
-    if (front && ["bear", "tiger", "gorilla", "crab", "scorpion"].includes(animalId)) {
-      for (const cl of [-1, 0, 1]) {
-        const claw = cone(0.04, 0.18, c.accent, { rough: 0.3, noTexture: true });
-        claw.position.set(endPoint.x + cl * 0.07, endPoint.y - 0.05, endPoint.z + 0.28);
-        claw.rotation.x = 1.2;
-        claw.castShadow = true;
-        legGroup.add(claw);
-      }
+    if (isWedgeHoof) {
+      foot.rotation.y = Math.PI / 4; // rotate square cylinder to look like hoof wedge
+      foot.position.set(s * 0.6, -0.85, z + 0.12);
+    } else {
+      foot.scale.set(1.0, 0.6, 1.3);
+      foot.position.set(s * 0.6, -0.85, z + 0.25);
     }
-    
+    legGroup.add(foot);
+
     g.add(legGroup);
   }
+
   return g;
 }
 
