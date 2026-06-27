@@ -1131,6 +1131,16 @@ function showTutorial(): void {
   appEl.append(overlay);
 }
 
+window.addEventListener("creature-assets-loaded", () => {
+  console.log("Assets loaded; redrawing UI and active 3D model preview...");
+  if (screen === "lab") {
+    renderLab();
+  }
+  if (creature3d && state.player) {
+    creature3d.setGenome(state.player);
+  }
+});
+
 // sanity: ensure data integrity at boot (helps catch a broken save/build)
 if (ANIMALS.length === 0) throw new Error("No animals defined");
 renderLab();

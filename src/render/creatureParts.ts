@@ -50,6 +50,9 @@ export const ANIMAL_COLORS: Record<string, PartColors> = {
 const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
 const conceptImage = isBrowser ? new Image() : null;
 if (conceptImage) {
+  conceptImage.onload = () => {
+    window.dispatchEvent(new CustomEvent("creature-assets-loaded"));
+  };
   conceptImage.src = "./chimera_concept.png";
 }
 
