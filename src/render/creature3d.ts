@@ -412,8 +412,11 @@ function applyToonOutline(mesh: THREE.Mesh, width = 0.02) {
     vertexShader: `
       uniform float outlineThickness;
       void main() {
-        vec3 pos = position + normal * outlineThickness;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        // Expand vertices along view-space normals to maintain scale independence
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vec3 viewNormal = normalize(normalMatrix * normal);
+        mvPosition.xyz += viewNormal * outlineThickness;
+        gl_Position = projectionMatrix * mvPosition;
       }
     `,
     fragmentShader: `
@@ -468,6 +471,7 @@ function mat(
   }
 
   const material = new THREE.MeshToonMaterial(params);
+  (material as any).flatShading = true; // Forces flat shading for crisp facets
 
   material.userData = {
     rimColor: { value: new THREE.Color(rimColorHex) },
@@ -491,7 +495,11 @@ function mat(
       `
       #include <dithering_fragment>
       vec3 viewDir = normalize(vViewPosition);
-      vec3 normalVal = normalize(vNormal);
+      #ifdef FLAT_SHADED
+        vec3 normalVal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+      #else
+        vec3 normalVal = normalize(vNormal);
+      #endif
       float rimDot = 1.0 - max(dot(normalVal, -viewDir), 0.0);
       float rimIntensityVal = pow(rimDot, rimPower);
       gl_FragColor.rgb += rimColor * rimIntensityVal * rimIntensity;
@@ -514,7 +522,8 @@ function sphere(
     noTexture?: boolean;
   } = {}
 ) {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat(c, opts));
+  // Extremely blocky sphere: 6 radial, 5 height segments
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
   }
@@ -534,7 +543,8 @@ function cone(
     noTexture?: boolean;
   } = {}
 ) {
-  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), mat(c, opts));
+  // 4-segment pyramid (low-poly cone)
+  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 4), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
   }
@@ -555,7 +565,29 @@ function cyl(
     noTexture?: boolean;
   } = {}
 ) {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 8), mat(c, opts));
+  // 5-segment prism (low-poly cylinder)
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, 5), mat(c, opts));
+  if (!opts.noOutline) {
+    applyToonOutline(mesh);
+  }
+  return mesh;
+}
+
+function box(
+  w: number,
+  h: number,
+  d: number,
+  c: string,
+  opts: {
+    rough?: number;
+    metal?: number;
+    emissive?: string;
+    emissiveI?: number;
+    noOutline?: boolean;
+    noTexture?: boolean;
+  } = {}
+) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c, opts));
   if (!opts.noOutline) {
     applyToonOutline(mesh);
   }
@@ -697,7 +729,7 @@ function buildHead(animalId: string): THREE.Group {
 
   // Extruded flat box brow ridges for battle-ready expression
   for (const s of [-1, 1] as const) {
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.18), mat(c.shade, { noTexture: true }));
+    const brow = box(0.24, 0.06, 0.18, c.shade, { noTexture: true });
     brow.position.set(s * 0.22, 0.28, 0.42);
     brow.rotation.y = -s * 0.15;
     g.add(brow);
@@ -930,14 +962,12 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       foreArm.rotation.set(-0.15, 0, s * 0.35);
       wingGroup.add(foreArm);
 
-      // Overlapping flat low-poly feathers (planes) parented to arm segments
+      // Overlapping volumetric low-poly feathers parented to arm segments
       for (let f = 0; f < 5; f++) {
-        const feather = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.4 - f * 0.15), mat(c.fill, { rough: 0.3 }));
+        const feather = box(0.35, 1.4 - f * 0.15, 0.04, c.fill, { rough: 0.3 });
         feather.position.set(s * (0.6 + f * 0.25), 0.2 - f * 0.08, -0.4 - f * 0.1);
         feather.rotation.set(0.15, 0, -s * (0.8 + f * 0.08));
-        feather.material.side = THREE.DoubleSide;
         wingGroup.add(feather);
-        applyToonOutline(feather);
       }
 
       wingGroup.position.set(s * 0.65, 0.2, -0.15);
@@ -1001,6 +1031,9 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
     const foot = isWedgeHoof 
       ? new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.25, 4), mat(c.accent, { noTexture: true }))
       : sphere(0.18, c.accent);
+    if (isWedgeHoof) {
+      applyToonOutline(foot);
+    }
     
     if (isWedgeHoof) {
       foot.rotation.y = Math.PI / 4; // rotate square cylinder to look like hoof wedge

@@ -53,7 +53,11 @@ export function applyToonStyle(
           `
           #include <dithering_fragment>
           vec3 viewDir = normalize(vViewPosition);
-          vec3 normalVal = normalize(vNormal);
+          #ifdef FLAT_SHADED
+            vec3 normalVal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+          #else
+            vec3 normalVal = normalize(vNormal);
+          #endif
           float rimDot = 1.0 - max(dot(normalVal, -viewDir), 0.0);
           float rimIntensityVal = pow(rimDot, rimPower);
           gl_FragColor.rgb += rimColor * rimIntensityVal * rimIntensity;
