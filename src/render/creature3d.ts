@@ -27,9 +27,9 @@ function getPremiumColor(hex: string): string {
   const hsl = { h: 0, s: 0, l: 0 };
   color.getHSL(hsl);
   
-  // Desaturate neon tones by 25% and bind lightness to match stylized hand-painted colors
-  hsl.s = Math.min(hsl.s * 0.75, 0.65);
-  hsl.l = Math.max(Math.min(hsl.l, 0.72), 0.22);
+  // Keep colors warm and rich (only desaturate by 10%)
+  hsl.s = Math.min(hsl.s * 0.9, 0.85);
+  hsl.l = Math.max(Math.min(hsl.l, 0.65), 0.18);
   
   color.setHSL(hsl.h, hsl.s, hsl.l);
   return "#" + color.getHexString();
@@ -61,12 +61,11 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
   ctx.fillStyle = baseHex;
   ctx.fillRect(0, 0, 256, 256);
 
-  // 1. Bake a vertical shading gradient (top-down lighting/ambient occlusion)
+  // 1. Bake a vertical shading gradient (underbelly shadow only, no white top-highlight to prevent washing out)
   const shadGrad = ctx.createLinearGradient(0, 0, 0, 256);
-  shadGrad.addColorStop(0, "rgba(255, 255, 255, 0.3)"); // soft highlight at the top
-  shadGrad.addColorStop(0.4, "rgba(255, 255, 255, 0)");
-  shadGrad.addColorStop(0.7, "rgba(0, 0, 0, 0)");
-  shadGrad.addColorStop(1, "rgba(0, 0, 0, 0.45)"); // dark ambient occlusion shadow at the bottom
+  shadGrad.addColorStop(0, "rgba(0, 0, 0, 0)"); 
+  shadGrad.addColorStop(0.5, "rgba(0, 0, 0, 0)");
+  shadGrad.addColorStop(1, "rgba(0, 0, 0, 0.4)"); // dark ambient occlusion shadow at the bottom
   ctx.fillStyle = shadGrad;
   ctx.fillRect(0, 0, 256, 256);
 
@@ -101,20 +100,20 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
       break;
     }
     case "tiger": {
-      ctx.fillStyle = "#121212";
-      for (let i = 0; i < 8; i++) {
-        const y = 20 + i * 32 + Math.random() * 8;
+      ctx.fillStyle = "#111116";
+      for (let i = 0; i < 10; i++) {
+        const y = 15 + i * 26 + Math.random() * 6;
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.quadraticCurveTo(80, y + 15, 120, y + 5);
-        ctx.quadraticCurveTo(80, y + 25, 0, y + 30);
+        ctx.quadraticCurveTo(90, y + 12, 130, y + 2);
+        ctx.quadraticCurveTo(90, y + 22, 0, y + 28);
         ctx.closePath();
         ctx.fill();
         
         ctx.beginPath();
-        ctx.moveTo(256, y + 10);
-        ctx.quadraticCurveTo(176, y + 25, 136, y + 15);
-        ctx.quadraticCurveTo(176, y + 35, 256, y + 40);
+        ctx.moveTo(256, y + 8);
+        ctx.quadraticCurveTo(166, y + 20, 126, y + 10);
+        ctx.quadraticCurveTo(166, y + 30, 256, y + 36);
         ctx.closePath();
         ctx.fill();
       }
@@ -640,13 +639,22 @@ export function createSoftShadowMesh(): THREE.Mesh {
 
 /** A pair of eyes parented to the head, looking forward (+Z). */
 function addEyes(head: THREE.Object3D, y: number, z: number, r = 0.09) {
+  const isTiger = currentBuilderAnimalId === "tiger";
+  const eyeColor = isTiger ? "#ffea00" : "#ffffff";
+  const eyeOpts = isTiger 
+    ? { rough: 0.1, noOutline: true, noTexture: true, emissive: "#ffcc00", emissiveI: 0.8 } 
+    : { rough: 0.2, noOutline: true, noTexture: true };
+
   for (const s of [-1, 1] as const) {
-    const white = sphere(r, "#ffffff", { rough: 0.2, noOutline: true, noTexture: true });
+    const white = sphere(r, eyeColor, eyeOpts);
     white.name = `eye_${s === 1 ? "r" : "l"}`;
     white.position.set(s * 0.22, y, z);
     head.add(white);
     const pupil = sphere(r * 0.55, "#0a0a0a", { rough: 0.1, noOutline: true, noTexture: true });
     pupil.name = `pupil_${s === 1 ? "r" : "l"}`;
+    if (isTiger) {
+      pupil.scale.set(0.35, 1.0, 1.0); // slit predator pupil
+    }
     pupil.position.set(s * 0.22, y, z + r * 0.7);
     head.add(pupil);
   }
@@ -707,6 +715,23 @@ function buildBody(animalId: string): THREE.Group {
       parent = segGroup;
     }
   } 
+  else if (animalId === "tiger") {
+    // Muscular chest
+    const chest = cyl(0.85, 0.65, 1.25, c.fill);
+    chest.rotation.x = Math.PI / 2;
+    chest.position.set(0, 0.05, 0.45);
+    g.add(chest);
+
+    // Hips
+    const hips = sphere(0.7, c.fill);
+    hips.position.set(0, -0.05, -0.45);
+    g.add(hips);
+
+    // White underbelly plates
+    const belly = box(0.65, 0.42, 1.28, "#ffffff", { rough: 0.8, noTexture: true });
+    belly.position.set(0, -0.38, 0.05);
+    g.add(belly);
+  }
   else {
     // Mammal Bipartite Torso: Chest Cylinder + Hip Sphere
     const chest = cyl(0.8, 0.7, 1.0, c.fill);
@@ -819,10 +844,39 @@ function buildHead(animalId: string): THREE.Group {
     }
     case "wolf": ears(0.34, 0.2, 0.5); break;
     case "tiger": {
-      ears(0.26, 0.22, 0.7); 
-      const muzzle = sphere(0.24, c.accent);
-      muzzle.position.set(0, -0.15, 0.5);
-      g.add(muzzle);
+      // White cheek ruffs
+      for (const s of [-1, 1] as const) {
+        const cheek = box(0.24, 0.42, 0.32, "#ffffff", { noTexture: true });
+        cheek.position.set(s * 0.48, -0.15, 0.22);
+        cheek.rotation.set(0.15, -s * 0.45, -s * 0.15);
+        g.add(cheek);
+      }
+
+      // Snout / Muzzle
+      const snout = box(0.38, 0.32, 0.48, c.fill);
+      snout.position.set(0, -0.05, 0.45);
+      g.add(snout);
+
+      // White chin/jaw ruff
+      const chin = box(0.32, 0.18, 0.38, "#ffffff", { noTexture: true });
+      chin.position.set(0, -0.22, 0.42);
+      g.add(chin);
+
+      // Ears (faceted tiger ears with white interior)
+      for (const s of [-1, 1] as const) {
+        const earGroup = new THREE.Group();
+        earGroup.position.set(s * 0.42, 0.52, -0.1);
+        earGroup.rotation.set(0.15, -s * 0.22, -s * 0.35);
+
+        const earOuter = cone(0.18, 0.32, c.fill);
+        earGroup.add(earOuter);
+
+        const earInner = cone(0.12, 0.24, "#ffffff", { noTexture: true });
+        earInner.position.set(0, 0.02, 0.05);
+        earGroup.add(earInner);
+
+        g.add(earGroup);
+      }
       break;
     }
     case "bear": {
@@ -969,22 +1023,22 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       wingGroup.name = `wing_${s === 1 ? "r" : "l"}`;
 
       // Joint 1: Humerus
-      const upperArm = cyl(0.12, 0.08, 0.9, c.shade);
+      const upperArm = cyl(0.14, 0.09, 0.95, c.shade);
       upperArm.position.set(s * 0.45, 0.2, -0.1);
       upperArm.rotation.set(0.2, 0, -s * 0.9);
       wingGroup.add(upperArm);
 
       // Joint 2: Forearm
-      const foreArm = cyl(0.08, 0.06, 1.1, c.shade);
+      const foreArm = cyl(0.09, 0.07, 1.15, c.shade);
       foreArm.position.set(s * 1.15, 0.65, -0.2);
       foreArm.rotation.set(-0.15, 0, s * 0.35);
       wingGroup.add(foreArm);
 
-      // Overlapping volumetric low-poly feathers parented to arm segments
-      for (let f = 0; f < 5; f++) {
-        const feather = box(0.35, 1.4 - f * 0.15, 0.04, c.fill, { rough: 0.3 });
-        feather.position.set(s * (0.6 + f * 0.25), 0.2 - f * 0.08, -0.4 - f * 0.1);
-        feather.rotation.set(0.15, 0, -s * (0.8 + f * 0.08));
+      // 7 overlapping volumetric feathers (stepped fan structure)
+      for (let f = 0; f < 7; f++) {
+        const feather = box(0.38, 1.5 - f * 0.15, 0.04, c.fill, { rough: 0.3 });
+        feather.position.set(s * (0.55 + f * 0.28), 0.25 - f * 0.09, -0.38 - f * 0.08);
+        feather.rotation.set(0.18, 0, -s * (0.75 + f * 0.07));
         wingGroup.add(feather);
       }
 
@@ -1189,9 +1243,52 @@ function buildTail(animalId: string): THREE.Group {
     return root;
   }
 
+  // Segmented Rocky Scorpion Tail
+  if (animalId === "scorpion") {
+    let parent: THREE.Object3D = root;
+    const segments = 9; // more segments for smoother arch
+    for (let i = 0; i < segments; i++) {
+      const t = i / (segments - 1);
+      const segGroup = new THREE.Group();
+      segGroup.name = `tail_seg_${i}`;
+      
+      if (i === 0) {
+        segGroup.position.set(0, 0.1, -0.9);
+      } else {
+        // Curve up and then slightly forward
+        segGroup.position.set(0, 1.65 / segments, -1.1 / segments);
+        segGroup.rotation.x = 0.22;
+      }
+      
+      // Rocky blocky tail segment box
+      const sz = 0.26 * (1 - t * 0.45);
+      const mesh = box(sz, sz, sz * 1.25, i % 2 === 0 ? "#4a4a52" : "#2d2d34", { rough: 0.8, noTexture: true }); // Alternating basalt grey rocks
+      mesh.rotation.set(Math.random() * 0.1, Math.random() * 0.1, Math.random() * 0.1); // slight low-poly variation
+      mesh.castShadow = true;
+      segGroup.add(mesh);
+
+      if (i === segments - 1) {
+        // Stinger bulb
+        const bulb = sphere(0.18, c.accent, { rough: 0.25, metal: 0.5 });
+        bulb.position.set(0, 0.15, 0.15);
+        segGroup.add(bulb);
+
+        // Curved claw stinger
+        const stinger = cone(0.05, 0.28, "#0d0d0d", { rough: 0.1 });
+        stinger.rotation.x = -1.35;
+        stinger.position.set(0, 0.25, 0.22);
+        segGroup.add(stinger);
+      }
+      
+      parent.add(segGroup);
+      parent = segGroup;
+    }
+    return root;
+  }
+
   // Standard bone chain tail
   let parent: THREE.Object3D = root;
-  const segments = animalId === "scorpion" ? 8 : (animalId === "cobra" ? 8 : (animalId === "tiger" ? 8 : 6));
+  const segments = animalId === "cobra" ? 8 : (animalId === "tiger" ? 8 : 6);
   
   for (let i = 0; i < segments; i++) {
     const t = i / (segments - 1);
@@ -1387,7 +1484,7 @@ export function mountCreature3D(
 
   // Elevate lighting aesthetics with ACESFilmic Tone Mapping!
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.25;
+  renderer.toneMappingExposure = 1.0;
 
   container.appendChild(renderer.domElement);
 
@@ -1397,15 +1494,15 @@ export function mountCreature3D(
   camera.lookAt(0, 1.6, 0);
 
   // Lighting: matches the 2D upper-left key + a violet rim for that 2026 pop.
-  scene.add(new THREE.AmbientLight(0x6677aa, 0.7));
-  const key = new THREE.DirectionalLight(0xfff1dd, 1.25);
+  scene.add(new THREE.AmbientLight(0x6677aa, 0.45));
+  const key = new THREE.DirectionalLight(0xfff1dd, 1.1);
   key.position.set(-4, 6, 5);
   key.castShadow = true;
   key.shadow.mapSize.width = 1024;
   key.shadow.mapSize.height = 1024;
   key.shadow.bias = -0.001;
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9b6cff, 0.7);
+  const rim = new THREE.DirectionalLight(0x9b6cff, 0.6);
   rim.position.set(5, 2, -4);
   scene.add(rim);
 
