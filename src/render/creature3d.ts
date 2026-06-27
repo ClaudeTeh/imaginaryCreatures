@@ -22,8 +22,26 @@ import {
 
 export const modelsReady: Promise<void> = preloadAllModels(ANIMALS.map((a) => a.id));
 
+function getPremiumColor(hex: string): string {
+  const color = new THREE.Color(hex);
+  const hsl = { h: 0, s: 0, l: 0 };
+  color.getHSL(hsl);
+  
+  // Desaturate neon tones by 25% and bind lightness to match stylized hand-painted colors
+  hsl.s = Math.min(hsl.s * 0.75, 0.65);
+  hsl.l = Math.max(Math.min(hsl.l, 0.72), 0.22);
+  
+  color.setHSL(hsl.h, hsl.s, hsl.l);
+  return "#" + color.getHexString();
+}
+
 function colorsFor(animalId: string): PartColors {
-  return ANIMAL_COLORS[animalId] ?? ANIMAL_COLORS.boar;
+  const c = ANIMAL_COLORS[animalId] ?? ANIMAL_COLORS.boar;
+  return {
+    fill: getPremiumColor(c.fill),
+    shade: getPremiumColor(c.shade),
+    accent: getPremiumColor(c.accent),
+  };
 }
 
 let currentBuilderAnimalId: string | null = null;
@@ -45,10 +63,10 @@ function createProceduralTexture(animalId: string, baseHex: string, accentHex: s
 
   // 1. Bake a vertical shading gradient (top-down lighting/ambient occlusion)
   const shadGrad = ctx.createLinearGradient(0, 0, 0, 256);
-  shadGrad.addColorStop(0, "rgba(255, 255, 255, 0.16)"); // soft highlight at the top
+  shadGrad.addColorStop(0, "rgba(255, 255, 255, 0.3)"); // soft highlight at the top
   shadGrad.addColorStop(0.4, "rgba(255, 255, 255, 0)");
   shadGrad.addColorStop(0.7, "rgba(0, 0, 0, 0)");
-  shadGrad.addColorStop(1, "rgba(0, 0, 0, 0.22)"); // dark ambient occlusion shadow at the bottom
+  shadGrad.addColorStop(1, "rgba(0, 0, 0, 0.45)"); // dark ambient occlusion shadow at the bottom
   ctx.fillStyle = shadGrad;
   ctx.fillRect(0, 0, 256, 256);
 
@@ -1250,11 +1268,15 @@ export function buildCreatureModel(genome: Genome): THREE.Group {
   const root = new THREE.Group();
 
   const placements: Record<Slot, (g: THREE.Object3D) => void> = {
-    body: (g) => g.position.set(0, 1.4, 0),
-    head: (g) => g.position.set(0, 2.15, 0.95),
-    forelimbs: (g) => g.position.set(0, 1.4, 0),
-    hindlimbs: (g) => g.position.set(0, 1.4, 0),
-    tail: (g) => g.position.set(0, 1.3, -0.3),
+    body: (g) => g.position.set(0, 1.45, 0),
+    head: (g) => g.position.set(0, 1.95, 0.78),
+    forelimbs: (g) => {
+      const id = genome.forelimbs;
+      const y = ["crab", "scorpion"].includes(id) ? 1.62 : (["eagle", "phoenix", "bat"].includes(id) ? 1.28 : 1.2);
+      g.position.set(0, y, 0);
+    },
+    hindlimbs: (g) => g.position.set(0, 1.2, 0),
+    tail: (g) => g.position.set(0, 1.35, -0.68),
   };
 
   const builders: Record<Slot, () => THREE.Group> = {
@@ -1299,11 +1321,11 @@ export function buildCreatureModel(genome: Genome): THREE.Group {
 
   // a neck bridge in the body's colour to tie head to torso
   currentBuilderAnimalId = genome.body;
-  const neck = sphere(0.4, colorsFor(genome.body).fill);
+  const neck = box(0.32, 0.42, 0.62, colorsFor(genome.body).fill);
   currentBuilderAnimalId = null;
   neck.name = "neck";
-  neck.scale.set(0.8, 0.9, 0.8);
-  neck.position.set(0, 1.85, 0.55);
+  neck.position.set(0, 1.72, 0.42);
+  neck.rotation.x = -0.65; // angle forward/up from chest to head
   root.add(neck);
 
   // Dynamic bio-luminescent PointLights inside the model based on genomes!
