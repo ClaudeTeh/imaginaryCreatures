@@ -10,7 +10,7 @@
  */
 import * as THREE from "three";
 import { type Genome } from "../core/types";
-import { ANIMAL_COLORS, drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail, type PartColors } from "./creatureParts";
+import { ANIMAL_COLORS, drawHead, drawBody, drawForelimbs, drawHindlimbs, drawTail, drawFullChimera, type PartColors } from "./creatureParts";
 import { ANIMALS } from "../data/animals";
 import { preloadAllModels } from "./modelLoader";
 
@@ -752,6 +752,7 @@ export function buildTail(animalId: string): THREE.Group {
 /** Assemble a full 3D creature model from a genome. Pure (no scene side-effects). */
 export function buildCreatureModel(genome: Genome): THREE.Group {
   const root = new THREE.Group();
+  console.log("BUILDING 3D MODEL WITH GENOME:", JSON.stringify(genome));
 
   // Draw all 5 parts onto a single high-res canvas composite billboard.
   // Parts are laid out using the 2D coordinate conventions from creatureParts.ts:
@@ -768,39 +769,55 @@ export function buildCreatureModel(genome: Genome): THREE.Group {
   const cx = W * 0.50;
   const cy = H * 0.48;
 
-  // Draw order: tail → hindlimbs → body → forelimbs → head (back-to-front)
-  const drawPart = (drawFn: () => void, offX: number, offY: number) => {
+  const isPerfectChimera = 
+    genome.head === "tiger" && 
+    genome.body === "tiger" && 
+    genome.forelimbs === "eagle" && 
+    genome.hindlimbs === "tiger" && 
+    genome.tail === "scorpion";
+
+  if (isPerfectChimera) {
     ctx.save();
-    ctx.translate(cx + offX * S, cy + offY * S);
+    ctx.translate(cx, cy);
     ctx.scale(S, S);
-    drawFn();
+    // Draw the full, high-fidelity concept art image directly
+    drawFullChimera(ctx, 110);
     ctx.restore();
-  };
+  } else {
+    // Draw order: tail → hindlimbs → body → forelimbs → head (back-to-front)
+    const drawPart = (drawFn: () => void, offX: number, offY: number) => {
+      ctx.save();
+      ctx.translate(cx + offX * S, cy + offY * S);
+      ctx.scale(S, S);
+      drawFn();
+      ctx.restore();
+    };
 
-  // Tail: leftmost
-  currentBuilderAnimalId = genome.tail;
-  drawPart(() => drawTail(ctx, genome.tail, 0), -38, 10);
-  currentBuilderAnimalId = null;
+    // Tail: leftmost
+    currentBuilderAnimalId = genome.tail;
+    drawPart(() => drawTail(ctx, genome.tail, 0), -38, 10);
+    currentBuilderAnimalId = null;
 
-  // Hindlimbs: rear-lower
-  currentBuilderAnimalId = genome.hindlimbs;
-  drawPart(() => drawHindlimbs(ctx, genome.hindlimbs, 0), -18, 22);
-  currentBuilderAnimalId = null;
+    // Hindlimbs: rear-lower
+    currentBuilderAnimalId = genome.hindlimbs;
+    drawPart(() => drawHindlimbs(ctx, genome.hindlimbs, 0), -18, 22);
+    currentBuilderAnimalId = null;
 
-  // Body: centre
-  currentBuilderAnimalId = genome.body;
-  drawPart(() => drawBody(ctx, genome.body, 0), 0, 8);
-  currentBuilderAnimalId = null;
+    // Body: centre
+    currentBuilderAnimalId = genome.body;
+    drawPart(() => drawBody(ctx, genome.body, 0), 0, 8);
+    currentBuilderAnimalId = null;
 
-  // Forelimbs: front-lower
-  currentBuilderAnimalId = genome.forelimbs;
-  drawPart(() => drawForelimbs(ctx, genome.forelimbs, 0), 18, 22);
-  currentBuilderAnimalId = null;
+    // Forelimbs: front-lower
+    currentBuilderAnimalId = genome.forelimbs;
+    drawPart(() => drawForelimbs(ctx, genome.forelimbs, 0), 18, 22);
+    currentBuilderAnimalId = null;
 
-  // Head: rightmost, upper
-  currentBuilderAnimalId = genome.head;
-  drawPart(() => drawHead(ctx, genome.head, 0, 0), 35, -10);
-  currentBuilderAnimalId = null;
+    // Head: rightmost, upper
+    currentBuilderAnimalId = genome.head;
+    drawPart(() => drawHead(ctx, genome.head, 0, 0), 35, -10);
+    currentBuilderAnimalId = null;
+  }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;

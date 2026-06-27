@@ -46,6 +46,59 @@ export const ANIMAL_COLORS: Record<string, PartColors> = {
   phoenix:   { fill: '#c04010', shade: '#601800', accent: '#ffd040' },
 };
 
+// ─── high-fidelity concept art preloader ──────────────────────────────────────
+const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
+const conceptImage = isBrowser ? new Image() : null;
+if (conceptImage) {
+  conceptImage.src = "./chimera_concept.png";
+}
+
+const croppedCanvases: Record<string, HTMLCanvasElement> = {};
+
+function drawCroppedImage(
+  ctx: CanvasRenderingContext2D,
+  partKey: string,
+  sx: number, sy: number, sw: number, sh: number,
+  dx: number, dy: number, dw: number, dh: number
+): boolean {
+  if (!conceptImage || !conceptImage.complete || conceptImage.naturalWidth === 0) {
+    return false; // Fallback to procedural rendering if not loaded yet
+  }
+  
+  let croppedCanvas = croppedCanvases[partKey];
+  if (!croppedCanvas) {
+    croppedCanvas = document.createElement("canvas");
+    croppedCanvas.width = sw;
+    croppedCanvas.height = sh;
+    const cctx = croppedCanvas.getContext("2d");
+    if (!cctx) return false;
+    
+    cctx.drawImage(conceptImage, sx, sy, sw, sh, 0, 0, sw, sh);
+    
+    // Key out white background to transparent
+    const imgData = cctx.getImageData(0, 0, sw, sh);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      if (r > 240 && g > 240 && b > 240) {
+        data[i + 3] = 0;
+      }
+    }
+    cctx.putImageData(imgData, 0, 0);
+    croppedCanvases[partKey] = croppedCanvas;
+  }
+  
+  ctx.drawImage(croppedCanvas, dx, dy, dw, dh);
+  return true;
+}
+
+export function drawFullChimera(ctx: CanvasRenderingContext2D, size = 160): boolean {
+  // Draw the entire 1024x1024 concept image centered at (0,0)
+  return drawCroppedImage(ctx, "full_chimera", 0, 0, 1024, 1024, -size/2, -size/2, size, size);
+}
+
 // ─── shared helpers ───────────────────────────────────────────────────────────
 
 /** Parse a #rrggbb hex into [r,g,b]. */
@@ -348,6 +401,9 @@ function headEel(ctx: CanvasRenderingContext2D, c: PartColors, atk: number) {
 }
 
 function headTiger(ctx: CanvasRenderingContext2D, c: PartColors, atk: number) {
+  if (drawCroppedImage(ctx, "tiger_head", 160, 480, 210, 210, -24, -26, 52, 52)) {
+    return;
+  }
   // small round ears
   ctx.fillStyle = c.fill; ctx.strokeStyle = c.shade; ctx.lineWidth = 2;
   ellipse(ctx, -14, -18, 7, 7); ctx.fill(); ctx.stroke();
@@ -543,6 +599,9 @@ function bodyEel(ctx: CanvasRenderingContext2D, c: PartColors, breathe: number) 
 }
 
 function bodyTiger(ctx: CanvasRenderingContext2D, c: PartColors, breathe: number) {
+  if (drawCroppedImage(ctx, "tiger_body", 250, 510, 420, 260, -38, -22, 76, 47)) {
+    return;
+  }
   ctx.scale(1 + breathe * 0.018, 1);
   ellipse(ctx, 0, 0, 24, 20); ctx.fillStyle = radial(ctx, 0, 0, 24, c.fill, c.shade); ctx.fill();
   ctx.strokeStyle = c.shade; ctx.lineWidth = 2; ctx.stroke();
@@ -617,6 +676,9 @@ function foreCrabClaw(ctx: CanvasRenderingContext2D, c: PartColors, atk: number)
 }
 
 function foreWing(ctx: CanvasRenderingContext2D, c: PartColors, atk: number) {
+  if (drawCroppedImage(ctx, "eagle_wings", 200, 40, 720, 560, -55, -48, 110, 85)) {
+    return;
+  }
   const spread = 1 + atk * 0.4;
   ctx.fillStyle = radial(ctx, 0, 0, 30, c.fill, c.shade);
   ctx.strokeStyle = c.shade; ctx.lineWidth = 2;
@@ -677,6 +739,11 @@ export function drawHindlimbs(
 }
 
 function hindHaunch(ctx: CanvasRenderingContext2D, c: PartColors, id: string, atk: number) {
+  if (id === 'tiger') {
+    if (drawCroppedImage(ctx, "tiger_legs", 240, 650, 460, 260, -35, -20, 70, 40)) {
+      return;
+    }
+  }
   const large = ['gorilla', 'bear'].includes(id);
   const r = large ? 10 : 8;
   // thigh
@@ -816,6 +883,9 @@ function tailLong(ctx: CanvasRenderingContext2D, c: PartColors, phase: number) {
 }
 
 function tailStinger(ctx: CanvasRenderingContext2D, c: PartColors, phase: number) {
+  if (drawCroppedImage(ctx, "scorpion_tail", 630, 420, 280, 320, -35, -40, 70, 80)) {
+    return;
+  }
   const bob = Math.sin(phase) * 4;
   // segments
   ctx.strokeStyle = c.shade; ctx.lineWidth = 9; ctx.lineCap = 'round';
