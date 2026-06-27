@@ -716,19 +716,22 @@ function buildBody(animalId: string): THREE.Group {
     }
   } 
   else if (animalId === "tiger") {
-    // Muscular chest
-    const chest = cyl(0.85, 0.65, 1.25, c.fill);
+    // Muscular chest (squashed sphere)
+    const chest = sphere(0.8, c.fill);
+    chest.scale.set(1.0, 0.9, 1.2);
     chest.rotation.x = Math.PI / 2;
     chest.position.set(0, 0.05, 0.45);
     g.add(chest);
 
-    // Hips
+    // Hips / Pelvis
     const hips = sphere(0.7, c.fill);
+    hips.scale.set(0.85, 0.75, 1.0);
     hips.position.set(0, -0.05, -0.45);
     g.add(hips);
 
-    // White underbelly plates
-    const belly = box(0.65, 0.42, 1.28, "#ffffff", { rough: 0.8, noTexture: true });
+    // White underbelly plates (squashed white sphere)
+    const belly = sphere(0.65, "#ffffff", { rough: 0.8, noTexture: true });
+    belly.scale.set(0.75, 0.38, 1.3);
     belly.position.set(0, -0.38, 0.05);
     g.add(belly);
   }
@@ -844,34 +847,55 @@ function buildHead(animalId: string): THREE.Group {
     }
     case "wolf": ears(0.34, 0.2, 0.5); break;
     case "tiger": {
-      // White cheek ruffs
-      for (const s of [-1, 1] as const) {
-        const cheek = box(0.24, 0.42, 0.32, "#ffffff", { noTexture: true });
-        cheek.position.set(s * 0.48, -0.15, 0.22);
-        cheek.rotation.set(0.15, -s * 0.45, -s * 0.15);
-        g.add(cheek);
-      }
+      // Skull (base sphere)
+      const skull = sphere(0.6, c.fill);
+      g.add(skull);
 
-      // Snout / Muzzle
-      const snout = box(0.38, 0.32, 0.48, c.fill);
+      // Muzzle / Snout (squashed sphere)
+      const snout = sphere(0.35, c.fill);
+      snout.scale.set(0.7, 0.6, 1.2);
       snout.position.set(0, -0.05, 0.45);
       g.add(snout);
 
-      // White chin/jaw ruff
-      const chin = box(0.32, 0.18, 0.38, "#ffffff", { noTexture: true });
+      // Small black nose tip
+      const noseTip = sphere(0.08, "#1a1a1a", { noTexture: true });
+      noseTip.position.set(0, 0.08, 0.85);
+      g.add(noseTip);
+
+      // White cheek ruffs (3 tiered white squashed cones on each side pointing outward and backward)
+      for (const s of [-1, 1] as const) {
+        for (let i = 0; i < 3; i++) {
+          const ruff = cone(0.18 - i * 0.03, 0.45 - i * 0.05, "#ffffff", { noTexture: true });
+          ruff.scale.set(0.6, 1.0, 0.2);
+          ruff.position.set(s * (0.42 + i * 0.08), -0.15 - i * 0.06, 0.28 - i * 0.05);
+          ruff.rotation.set(0.15, -s * 0.45, -s * (0.35 + i * 0.1));
+          g.add(ruff);
+        }
+      }
+
+      // White chin/jaw ruff (rounded white sphere)
+      const chin = sphere(0.24, "#ffffff", { rough: 0.8, noTexture: true });
+      chin.scale.set(0.8, 0.45, 1.0);
       chin.position.set(0, -0.22, 0.42);
       g.add(chin);
 
-      // Ears (faceted tiger ears with white interior)
+      // Lower jaw
+      const jaw = box(0.32, 0.14, 0.4, c.shade);
+      jaw.position.set(0, -0.32, 0.35);
+      g.add(jaw);
+
+      // Ears (faceted tiger ears with white interior - shell shape)
       for (const s of [-1, 1] as const) {
         const earGroup = new THREE.Group();
         earGroup.position.set(s * 0.42, 0.52, -0.1);
         earGroup.rotation.set(0.15, -s * 0.22, -s * 0.35);
 
-        const earOuter = cone(0.18, 0.32, c.fill);
+        const earOuter = cone(0.2, 0.32, c.fill);
+        earOuter.scale.set(1.0, 1.0, 0.3); // cup shell
         earGroup.add(earOuter);
 
-        const earInner = cone(0.12, 0.24, "#ffffff", { noTexture: true });
+        const earInner = cone(0.14, 0.24, "#ffffff", { noTexture: true });
+        earInner.scale.set(1.0, 1.0, 0.3); // cup shell
         earInner.position.set(0, 0.02, 0.05);
         earGroup.add(earInner);
 
@@ -1034,9 +1058,10 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
       foreArm.rotation.set(-0.15, 0, s * 0.35);
       wingGroup.add(foreArm);
 
-      // 7 overlapping volumetric feathers (stepped fan structure)
+      // 7 overlapping volumetric feathers (stepped fan structure using squashed spheres!)
       for (let f = 0; f < 7; f++) {
-        const feather = box(0.38, 1.5 - f * 0.15, 0.04, c.fill, { rough: 0.3 });
+        const feather = sphere(0.3, c.fill, { rough: 0.3 });
+        feather.scale.set(0.62, 2.3 - f * 0.22, 0.06);
         feather.position.set(s * (0.55 + f * 0.28), 0.25 - f * 0.09, -0.38 - f * 0.08);
         feather.rotation.set(0.18, 0, -s * (0.75 + f * 0.07));
         wingGroup.add(feather);
@@ -1086,35 +1111,55 @@ function buildLimbs(animalId: string, front: boolean): THREE.Group {
   for (const s of [-1, 1] as const) {
     const legGroup = new THREE.Group();
 
-    // Thigh
-    const thigh = cyl(0.22, 0.16, 0.65, c.fill);
-    thigh.position.set(s * 0.55, 0.1, z);
-    thigh.rotation.z = s * 0.22;
-    legGroup.add(thigh);
+    if (animalId === "tiger") {
+      // Beautifully bent feline legs
+      const thigh = cyl(0.24, 0.18, 0.75, c.fill);
+      thigh.rotation.x = -0.35; // angled back
+      thigh.rotation.z = s * 0.15;
+      thigh.position.set(s * 0.55, 0.1, z - 0.08);
+      legGroup.add(thigh);
 
-    // Shin
-    const shin = cyl(0.15, 0.1, 0.75, c.shade);
-    shin.position.set(s * 0.65, -0.45, z + 0.08);
-    shin.rotation.z = -s * 0.14;
-    legGroup.add(shin);
+      const shin = cyl(0.18, 0.12, 0.85, c.shade);
+      shin.rotation.x = 0.55; // angled forward
+      shin.rotation.z = -s * 0.08;
+      shin.position.set(s * 0.55, -0.45, z + 0.12);
+      legGroup.add(shin);
 
-    // Foot / Wedge hoof / Paw block
-    const isWedgeHoof = ["ox", "rhino", "boar"].includes(animalId);
-    const foot = isWedgeHoof 
-      ? new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.25, 4), mat(c.accent, { noTexture: true }))
-      : sphere(0.18, c.accent);
-    if (isWedgeHoof) {
-      applyToonOutline(foot);
-    }
-    
-    if (isWedgeHoof) {
-      foot.rotation.y = Math.PI / 4; // rotate square cylinder to look like hoof wedge
-      foot.position.set(s * 0.6, -0.85, z + 0.12);
+      const foot = sphere(0.22, c.accent);
+      foot.scale.set(1.2, 0.55, 1.45);
+      foot.position.set(s * 0.55, -0.85, z + 0.35);
+      legGroup.add(foot);
     } else {
-      foot.scale.set(1.0, 0.6, 1.3);
-      foot.position.set(s * 0.6, -0.85, z + 0.25);
+      // Thigh
+      const thigh = cyl(0.22, 0.16, 0.65, c.fill);
+      thigh.position.set(s * 0.55, 0.1, z);
+      thigh.rotation.z = s * 0.22;
+      legGroup.add(thigh);
+
+      // Shin
+      const shin = cyl(0.15, 0.1, 0.75, c.shade);
+      shin.position.set(s * 0.65, -0.45, z + 0.08);
+      shin.rotation.z = -s * 0.14;
+      legGroup.add(shin);
+
+      // Foot / Wedge hoof / Paw block
+      const isWedgeHoof = ["ox", "rhino", "boar"].includes(animalId);
+      const foot = isWedgeHoof 
+        ? new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.25, 4), mat(c.accent, { noTexture: true }))
+        : sphere(0.18, c.accent);
+      if (isWedgeHoof) {
+        applyToonOutline(foot);
+      }
+      
+      if (isWedgeHoof) {
+        foot.rotation.y = Math.PI / 4; // rotate square cylinder to look like hoof wedge
+        foot.position.set(s * 0.6, -0.85, z + 0.12);
+      } else {
+        foot.scale.set(1.0, 0.6, 1.3);
+        foot.position.set(s * 0.6, -0.85, z + 0.25);
+      }
+      legGroup.add(foot);
     }
-    legGroup.add(foot);
 
     g.add(legGroup);
   }
@@ -1260,10 +1305,12 @@ function buildTail(animalId: string): THREE.Group {
         segGroup.rotation.x = 0.22;
       }
       
-      // Rocky blocky tail segment box
-      const sz = 0.26 * (1 - t * 0.45);
-      const mesh = box(sz, sz, sz * 1.25, i % 2 === 0 ? "#4a4a52" : "#2d2d34", { rough: 0.8, noTexture: true }); // Alternating basalt grey rocks
-      mesh.rotation.set(Math.random() * 0.1, Math.random() * 0.1, Math.random() * 0.1); // slight low-poly variation
+      // Rocky blocky tail segment dodecahedron (low-poly basalt rock)
+      const sz = 0.18 * (1 - t * 0.42);
+      const geom = new THREE.DodecahedronGeometry(sz);
+      const mesh = new THREE.Mesh(geom, mat(i % 2 === 0 ? "#4a4a52" : "#2d2d34", { rough: 0.85, noTexture: true }));
+      mesh.scale.set(1.0, 1.0, 1.45); // Elongated along the tail axis
+      applyToonOutline(mesh);
       mesh.castShadow = true;
       segGroup.add(mesh);
 
