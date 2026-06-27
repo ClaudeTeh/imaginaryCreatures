@@ -24,8 +24,8 @@ export interface GameState {
   gauntletBestScore: number;
 }
 
-/** Animals available at the start; the rest unlock by winning. */
-const STARTERS = ["ant", "rabbit", "crab", "gecko", "boar"];
+/** Animals available at the start; all are unlocked by default. */
+const STARTERS = ANIMALS.map((a) => a.id);
 
 /** The order locked animals unlock in (tier 1 -> 3). */
 export const UNLOCK_ORDER = ANIMALS.filter((a) => !STARTERS.includes(a.id))
@@ -62,10 +62,10 @@ export function load(): GameState {
     if (!raw) return newGame();
     const data = JSON.parse(raw) as Partial<GameState>;
     const validIds = new Set(ANIMALS.map((a) => a.id));
-    const unlocked = (data.unlocked ?? STARTERS).filter((id) => validIds.has(id));
+    const unlocked = [...STARTERS];
     const player = sanitizeGenome(data.player, unlocked);
     return {
-      unlocked: unlocked.length ? unlocked : [...STARTERS],
+      unlocked,
       player,
       wins: data.wins ?? 0,
       losses: data.losses ?? 0,
